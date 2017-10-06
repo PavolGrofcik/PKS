@@ -16,7 +16,7 @@
 
 //Definovanie vlastnej štruktury
 typedef struct prot {
-	char name[11];			//nazov
+	char name[11];		//nazov
 	int dest;			//destination
 	int src;			//source
 	int len;			//type
@@ -114,19 +114,26 @@ void delete(Protocol *f) {
 }
 
 void point_1(pcap_t *f, struct pcap_pkthdr *hdr, const u_char *pkt_data, int *count, Protocol *first) {
+
+	//Pomocné premenné
 	Protocol *akt = NULL;
 	int i, pom;
 
-	if (akt = NULL) {
+	//nasmerovanie na zaèiatok
+	akt = first;
+
+	if (akt == NULL) {
 		return;
 	}
+	else if ((*count) != 0) {
+		(*count) = 0;
+	}
 
-	while (pcap_next_ex(f, &hdr, &pkt_data) > 0) {
+	while ((pcap_next_ex(f, &hdr, &pkt_data)) >= 0) {
 
 		printf("Ramec: %d\n", ++(*count));
 		printf("Dlzka ramca poskytnuteho pcap API: %d\n", hdr->caplen);
 		printf("Dlza ramca prenasaneho po mediu: %d\n", hdr->len < 60 ? 64 : hdr->len + 4);
-		akt = first;
 		pom = akt->dest + akt->src;	//12
 
 		if (pkt_data[pom] >= akt->arr[0]/100) {
@@ -137,6 +144,7 @@ void point_1(pcap_t *f, struct pcap_pkthdr *hdr, const u_char *pkt_data, int *co
 			akt = akt->next;
 			printf("%s -", akt->name);
 			pom += akt->len;
+
 			if (pkt_data[pom] == akt->arr[0]) {
 				printf("Raw\n");
 			}
@@ -193,13 +201,14 @@ void point_1(pcap_t *f, struct pcap_pkthdr *hdr, const u_char *pkt_data, int *co
 int main(void) {
 
 	char errbuff[PCAP_ERRBUF_SIZE];
-	int count = 0;										//Udáva poradové èíslo rámca ,poèet všetkıch rámcov nachádzajúcich sa v súbore
+	int c,count = 0;										//Udáva poradové èíslo rámca ,poèet všetkıch rámcov nachádzajúcich sa v súbore
 	pcap_t *f = NULL;									//Smerník na spájanı zoznam
 	const u_char *pktdata = NULL;
 	struct pcap_pkthdr *header = NULL;
 
 	FILE *r = NULL;
-	Protocol *first = NULL;
+	Protocol *first = NULL
+		;
 
 
 
@@ -213,15 +222,22 @@ int main(void) {
 	}
 	else
 	{
-		//naèítanie do štruktúry
+		//naèítanie protokolov do spájaného zoznamu
 		nacitaj(&first, r);
 
 		
 		//kontrolnı vıpis
 		vypis_prot(first);
+		while((c=getchar())!='k'){
 
-		point_1(f,header,pktdata,&count,first);
+			switch (c) {
+			case '1':point_1(f, header, pktdata, &count, first), pcap_close(f),
+				f = (pcap_open_offline("newsample.pcap", errbuff)); break;
+			case 'a':printf("Hello world guys!\n");
+			}
 
+		}
+		
 		//Po dokonèení je nutné súbory zavrie
 		pcap_close(f);
 
