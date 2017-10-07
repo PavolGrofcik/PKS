@@ -297,15 +297,13 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 	int i, j = 0, max = 0,delimiter;
 	char errbuff[20];
 	int count = 0, frame, tmp = 0;
+
 	int **arr = NULL;
 	int *space = NULL;
 
 
 	delimiter = akt->ip->s_ip + 4;
 
-
-	//ERROOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOR!!! skús stlaèi 3 krat po sebe tlacidlo 1 a vyhodí error (Local windows debugger
-	//alokujeme 2d pole na zapamatanie IP adries  a ich odvysielanych bajtov
 	if ((arr = (int**)malloc(n * sizeof(int*))) == NULL) {
 		printf("Nedostatok pamate\n");
 		return;
@@ -347,8 +345,7 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 		//Priradenie IP s velkostou
 		arr[count - 1][0] = tmp;			//IP adresa
 		arr[count - 1][1] = hdr->caplen;	//Hodnota po mediu
-		//odriadokovanie
-		putchar('\n');
+
 		tmp = 0;
 
 	}
@@ -374,12 +371,14 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 			frame = tmp;
 		}
 	}
+	putchar('\n');
 
-	//rewindovanie f
+	//rewindovanie pcap_t (f)
 	pcap_close(f);
 	f = (pcap_open_offline("eth-8.pcap", errbuff));
 	count = 0;
 	j = 0;
+	//Hranica IP
 	max = akt->ip->len + akt->ip->s_ip;
 	printf("Adresa uzla s najvacsim poctom odvysielanych bajtov:\n");
 
@@ -449,17 +448,19 @@ int main(void) {
 		//Naèítanie protokolov a informácií do spájaného zoznamu
 		nacitaj(&first, r);
 
-
 		//kontrolný výpis
 		//vypis_prot(first);
+
 		while ((c = getchar()) != 'k') {
 
 			switch (c) {
 				//Bod c. 1
-			case '1':Point_1(f, header, pktdata, &count, first), pcap_close(f),
+			case '1':Point_1(f, header, pktdata, &count, first),
+				pcap_close(f),
 				(f = (pcap_open_offline("eth-8.pcap", errbuff))),
 				Vypis_ip(f, first, header, pktdata, count);
 				break;
+
 				//Bod 3 - a:i
 			case 'a':printf("Hello world guys!\n"); break;
 			}
@@ -478,5 +479,5 @@ int main(void) {
 		first = NULL;
 		return 0;
 	}
-	//exit(0);
+
 }
