@@ -532,6 +532,7 @@ void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, in
 	}
 }
 
+//Vypis HTTPS komunikácií
 void Vypis_HTTPS(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int count, Protocol *first) {
 
 	int i, position, prot_pos, tmp = 0, pom = 0;
@@ -638,7 +639,7 @@ void Vypis_HTTPS(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, i
 	}
 }
 
-
+//Výpis Telne komunikácií
 void Vypis_Telnet(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Protocol *first) {
 	int i, position, prot_pos, tmp = 0, pom = 0;
 	int delimiter, delimiter2;
@@ -956,6 +957,111 @@ void Vypis_FTP_Control(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktd
 	}
 }
 
+void Vypis_FTP_Data(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Protocol *first) {
+	int i, position, prot_pos, tmp = 0, pom = 0;
+	int delimiter, delimiter2;
+	Protocol *akt = first;
+
+	//nastavenie pozície na 12 B (zaèiatok Ipv4)
+	position = akt->dest + akt->src;//12. B
+	prot_pos = akt->ip->prot_pos;
+	delimiter = akt->ip->d_ip;
+	delimiter2 = akt->ip->tcp->d_port;
+
+	//Prechadzanie paketmi a urèenie HTTPS
+	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
+		tmp++;
+		//Zistenie èi sa jedná o IPv4 (0800)
+		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1])) {
+
+			//Protokol HTTP sa nachádza na na relaènej vrtsve protokolu - TCP(06)
+			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
+
+				//Hodnota cieloveho portu musí by 80(https) Dst port(pozicia druha tj(36+1)==37
+				if (pktdata[akt->ip->tcp->d_port + 1] == akt->ip->tcp->ports[0].num) {
+					printf("Ramec: %d\n", tmp);
+					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
+					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
+					printf("%s\n", akt->name);
+
+					printf("Zdrojova MAC adresa: ");
+					for (i = akt->dest; i < akt->dest + akt->src; i++) {
+						if (i == 11) {
+							printf("%.2x\n", pktdata[i]);
+							break;
+						}
+						printf("%.2x ", pktdata[i]);
+					}
+
+					printf("Cielova MAC adresa: ");
+					for (i = 0; i < akt->dest; i++) {
+						if (i == 5) {
+							printf("%.2x\n", pktdata[i]);
+							break;
+						}
+						printf("%.2x ", pktdata[i]);
+					}
+
+					//IPv4
+					printf("%s\n", akt->ip->name);
+					printf("Zdrojova IP adresa: ");
+					//Src IP
+					for (i = akt->ip->s_ip; i < delimiter; i++) {
+						if (i == delimiter - 1) {
+							printf("%d\n", pktdata[i]);
+							break;
+						}
+						printf("%d. ", pktdata[i]);
+					}
+					//Dst IP
+					printf("Cielova IP adresa: ");
+					for (i = delimiter; i < delimiter + akt->ip->len; i++) {
+						if (i == (delimiter + akt->ip->len - 1)) {
+							printf("%d\n", pktdata[i]);
+							break;
+						}
+						printf("%d. ", pktdata[i]);
+					}
+
+					//TCP
+					printf("%s\n", akt->ip->tcp->name);
+
+					//Porty
+					//Src
+					pom = 0;
+					printf("Zdrojovy port: ");
+					for (i = akt->ip->tcp->s_port; i < delimiter2; i++) {
+						if (i == akt->ip->tcp->s_port) {
+							pom = pktdata[i] * 256;
+						}
+						else
+						{
+							pom += pktdata[i];
+						}
+					}
+					printf("%d\n", pom);
+					//Dst
+					printf("Cielovy port: %d\n", akt->ip->tcp->ports[0].num);
+
+					//Vypis Bytov(packetu)
+					for (i = 1; i <= header->caplen; i++) {
+
+						printf("%.2x ", pktdata[i - 1]);
+
+						if (i % LINE_LEN == 8) {
+							printf("  ");
+						}
+						else if (i % LINE_LEN == 0) {
+							printf("\n");
+						}
+					}
+					putchar('\n');
+				}
+			}
+		}
+	}
+}
+
 
 
 // Ak otvaraš iný súbor musíš zmenit v main,switch-rewind point 1 a vypis-IP
@@ -1006,6 +1112,7 @@ int main(void) {
 			case 'c':Vypis_Telnet(f, header, pktdata, first); break;
 			case 'd':Vypis_SSH(f, header, pktdata, first); break;
 			case 'e':Vypis_FTP_Control(f, header, pktdata, first); break;
+			case 'f':Vypis_FTP_Data(f, header, pktdata, first); break;
 
 			}
 
