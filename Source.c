@@ -35,6 +35,7 @@ typedef struct tcp {
 	int s_port;			//Src port
 	int d_port;			//Dst port
 	int len_p;			//Ve¾kos portov(Bytes)
+	int tcp_value;
 	Pairs ports[6];		//Hodnota portu + názov
 }Tcp;
 
@@ -45,6 +46,7 @@ typedef struct ip {
 	int s_ip;			//Src ip
 	int d_ip;			//Dst ip
 	int len;			//Ve¾kos Ip adresy(Bytes)
+	int prot_pos;		//Pozícia ïalšieho protokolu
 	Tcp tcp[1];			//Vnorený protokol TCP
 }IP;
 
@@ -114,6 +116,8 @@ void nacitaj(Protocol **first, FILE *f) {
 			fscanf(f, "%d", &(*first)->ip->s_ip);
 			fscanf(f, "%d", &(*first)->ip->d_ip);
 			fscanf(f, "%d", &(*first)->ip->len);
+			fscanf(f, "%d", &(*first)->ip->prot_pos);
+			printf("Position of protocol in ip %d\n", (*first)->ip->prot_pos);
 
 		}
 
@@ -125,6 +129,7 @@ void nacitaj(Protocol **first, FILE *f) {
 			fscanf(f, "%d", &(*first)->ip->tcp->s_port);
 			fscanf(f, "%d", &(*first)->ip->tcp->d_port);
 			fscanf(f, "%d", &(*first)->ip->tcp->len_p);
+			fscanf(f, "%d", &(*first)->ip->tcp->tcp_value);
 			//spravi cez for loop
 			fscanf(f, "%d", &(*first)->ip->tcp->ports[0].num);
 			fscanf(f, "%s", (*first)->ip->tcp->ports[0].name);
@@ -301,9 +306,10 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 	int **arr = NULL;
 	int *space = NULL;
 
-
+	//Hranica (src) IP adrey 
 	delimiter = akt->ip->s_ip + 4;
 
+	//Alokácia 2d po¾a na urèenie max ve¾kosti bajtov
 	if ((arr = (int**)malloc(n * sizeof(int*))) == NULL) {
 		printf("Nedostatok pamate\n");
 		return;
@@ -313,9 +319,8 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 		space = (int *)calloc(ARRAY_LEN*n,sizeof(int));
 	}
 
-	//nasmerujeme pole smernikov žvonzíkov
+	//Nasmerovanie po¾a smernikov žvonzíkov
 	for (i = 0; i < n; ++i) {
-		printf("I je %d\n", i);
 		arr[i] = space + i*ARRAY_LEN;
 	}
 
@@ -344,17 +349,17 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 		
 		//Priradenie IP s velkostou
 		arr[count - 1][0] = tmp;			//IP adresa
-		arr[count - 1][1] = hdr->caplen;	//Hodnota po mediu
+		arr[count - 1][1] = hdr->caplen;	//Hodnota po mediu(Bajty)
 
 		tmp = 0;
-
 	}
 
-	frame= arr[0][0];		//ip adresa
-	delimiter = arr[0][1];	//hodnota bajtov
+
+	frame= arr[0][0];						//Default IP adresa
+	delimiter = arr[0][1];					//Default hodnota bajtov
 	for (i = 1; i < n; i++) {
 		if (arr[i][0] == frame) {			//def ip
-			delimiter += arr[i][1];		//def max
+			delimiter += arr[i][1];			//def max
 		}
 	}
 
@@ -371,17 +376,20 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 			frame = tmp;
 		}
 	}
+
+	//Odriakovanie pre výpis
 	putchar('\n');
 
-	//rewindovanie pcap_t (f)
+	//Rewindovanie pcap_t (f)
 	pcap_close(f);
-	f = (pcap_open_offline("eth-8.pcap", errbuff));
+	f = (pcap_open_offline("trace-20.pcap", errbuff));
 	count = 0;
-	j = 0;
+
 	//Hranica IP
 	max = akt->ip->len + akt->ip->s_ip;
 	printf("Adresa uzla s najvacsim poctom odvysielanych bajtov:\n");
 
+	//Cyklíme na zistenie IP adresy pre daný velkost
 	while ((pcap_next_ex(f, &hdr, &pkt_data)) >= 0) {
 
 	
@@ -405,7 +413,7 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 			count = 0;
 	}
 
-	//Dealokacia
+	//Dealokacia - vrátenie "požièaných" bajtov OS
 
 	for (i = 0; i < n; i++) {
 		arr[i] = NULL;
@@ -413,19 +421,128 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 	free(space);
 	free(arr);
 	arr = NULL;
-	
-	//Rewindovanie spájaneho zoznamu na zaèiatok
-	pcap_close(f);
-	f = (pcap_open_offline("eth-8.pcap", errbuff));
 
 }
 
 
-//Hlavná funkcia main
+//Výpis pre HTTP komunikácie
+void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int count, Protocol *first) {
+	
+	int i, position, prot_pos, tmp=0, pom = 0;
+	int delimiter, delimiter2;
+	Protocol *akt = first;
+	char errbuff[10];
+
+	//nastavenie pozície na 12 B (zaèiatok Ipv4)
+	position = akt->dest + akt->src;//12. B
+	prot_pos = akt->ip->prot_pos;
+	delimiter = akt->ip->d_ip;
+	delimiter2 = akt->ip->tcp->d_port;
+
+	//Prechadzanie paketmi a urèenie HTTP
+	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
+		tmp++;
+		//Zistenie èi sa jedná o IPv4 (0800)
+		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1])) {
+
+			//Protokol HTTP sa nachádza na na relaènej vrtsve protokolu - TCP(06)
+			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
+				
+				//Hodnota cieloveho portu musí by 80(https) Dst port(pozicia druha tj(36+1)==37
+				if (pktdata[akt->ip->tcp->d_port+1] == akt->ip->tcp->ports[4].num) {
+					printf("Ramec: %d\n", tmp);
+					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
+					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
+					printf("%s\n", akt->name);
+
+					printf("Zdrojova MAC adresa: ");
+					for (i = akt->dest; i < akt->dest + akt->src; i++) {
+						if (i == 11) {
+							printf("%.2x\n", pktdata[i]);
+							break;
+						}
+						printf("%.2x ", pktdata[i]);
+					}
+
+					printf("Cielova MAC adresa: ");
+					for (i = 0; i < akt->dest; i++) {
+						if (i == 5) {
+							printf("%.2x\n", pktdata[i]);
+							break;
+						}
+						printf("%.2x ", pktdata[i]);
+					}
+
+					//IPv4
+					printf("%s\n", akt->ip->name);
+					printf("Zdrojova IP adresa: ");
+					//Src IP
+					for (i = akt->ip->s_ip; i < delimiter; i++) {
+						if (i == delimiter - 1) {
+							printf("%d\n", pktdata[i]);
+							break;
+						}
+						printf("%d. ", pktdata[i]);
+					}
+					//Dst IP
+					printf("Cielova IP adresa: ");
+					for (i = delimiter; i < delimiter + akt->ip->len; i++) {
+						if (i == (delimiter + akt->ip->len -1)) {
+							printf("%d\n", pktdata[i]);
+							break;
+						}
+						printf("%d. ", pktdata[i]);
+					}
+
+					//TCP
+					printf("%s\n", akt->ip->tcp->name);
+
+					//Porty
+					//Src
+					pom = 0;
+					printf("Zdrojovy port: ");
+					for (i = akt->ip->tcp->s_port; i < delimiter2; i++) {
+						if (i == akt->ip->tcp->s_port) {
+							pom = pktdata[i] * 256;
+						}
+						else
+						{
+							pom += pktdata[i];
+						}
+					}
+					printf("%d\n", pom);
+					//Dst
+					printf("Cielovy port: %d\n", akt->ip->tcp->ports[4].num);
+
+					//Vypis Bytov(packetu)
+					for (i = 1; i <= header->caplen; i++) {
+
+						printf("%.2x ", pktdata[i - 1]);
+
+						if (i % LINE_LEN == 8) {
+							printf("  ");
+						}
+						else if (i % LINE_LEN == 0) {
+							printf("\n");
+						}
+					}
+					putchar('\n');
+				}
+			}
+		}
+	}
+
+}
+
+
+
+// Ak otvaraš iný súbor musíš zmenit v main,switch-rewind point 1 a vypis-IP
+
 int main(void) {
 
 	char errbuff[PCAP_ERRBUF_SIZE];
 	int c, count = 0;										//Udáva poradové èíslo rámca ,poèet všetkých rámcov nachádzajúcich sa v súbore
+
 	pcap_t *f = NULL;										//Smerník na spájaný zoznam packetov zo súboru
 	const u_char *pktdata = NULL;
 	struct pcap_pkthdr *header = NULL;
@@ -435,7 +552,7 @@ int main(void) {
 
 
 	//Otvorenie súborov na analýzu
-	if ((f = (pcap_open_offline("eth-8.pcap", errbuff))) == NULL ||
+	if ((f = (pcap_open_offline("trace-20.pcap", errbuff))) == NULL ||
 		(r = fopen("Linkframe.txt", "r")) == NULL) {
 
 		//Ak nastane chyba otvorenia súborov, program sa ukonèí
@@ -457,13 +574,19 @@ int main(void) {
 				//Bod c. 1
 			case '1':Point_1(f, header, pktdata, &count, first),
 				pcap_close(f),
-				(f = (pcap_open_offline("eth-8.pcap", errbuff))),
+				(f = (pcap_open_offline("trace-20.pcap", errbuff))),
 				Vypis_ip(f, first, header, pktdata, count);
 				break;
 
-				//Bod 3 - a:i
-			case 'a':printf("Hello world guys!\n"); break;
+				//Bod 3 - HTTP
+			case 'a':Vypis_HTTP(f, header, pktdata, count, first); break;
+
 			}
+
+			//rewindovanie
+			pcap_close(f);
+			f = (pcap_open_offline("trace-20.pcap", errbuff));
+	
 		}
 
 
