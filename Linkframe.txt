@@ -2,4 +2,6 @@ Ethernet-II	 6	6	2	0600	0800	0806
 ARP	19	2	1 Request	2	Reply
 IPv4	14	26	30	4	23
 TCP	34	36	2	6	20 ftp-data	21	ftp-control	22	ssh	23	telnet	80 http	443	https
+UDP 27	29	2	17	69	tftp
+ICMP	33	1	1	0	Echo-reply	3 Dst-Unreachable	5	Redirect	8	Echo 	11	Time_Exceeded	30	Traceroute
 IEEE-802.3   6	6	2	255		170		000

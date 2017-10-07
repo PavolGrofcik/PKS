@@ -18,9 +18,26 @@
 //Štruktúra párov pre port + názov
 typedef struct  pairs {
 	int num;
-	char name[15];
+	char name[16];
 }Pairs;
 
+//Štruktúra pre UDP
+typedef struct udp {
+	char name[4];		//UDP
+	int s_port;			//Src port
+	int d_port;			//Dst port
+	int len;			//Ve¾kost portov
+	int udp_value;		//Pozícia UDP
+	Pairs ports[1];		//Hodnota portov s názvom
+}Udp;
+
+typedef struct icmp {
+	char name[4];		//ICMP
+	int type;			//Pozícia protokolu
+	int len;			//Dlzka
+	int icmp_value;		//Pozícia ICMP
+	Pairs code[6];		//Hodnoty protokolov s nazvom
+}Icmp;
 //Štruktúra pre ARP
 typedef struct arp {
 	char name[4];		//ARP
@@ -35,7 +52,7 @@ typedef struct tcp {
 	int s_port;			//Src port
 	int d_port;			//Dst port
 	int len_p;			//Ve¾kos portov(Bytes)
-	int tcp_value;
+	int tcp_value;		//Pozicia TCP 
 	Pairs ports[6];		//Hodnota portu + názov
 }Tcp;
 
@@ -48,6 +65,8 @@ typedef struct ip {
 	int len;			//Ve¾kos Ip adresy(Bytes)
 	int prot_pos;		//Pozícia ïalšieho protokolu
 	Tcp tcp[1];			//Vnorený protokol TCP
+	Icmp icmp[1];		//Vnorený protokol ICMP
+	Udp udp[1];			//Vnorený protokol UDP
 }IP;
 
 //Definovanie vlastnej štruktury pre Ethernet a 802.3
@@ -68,7 +87,7 @@ void nacitaj(Protocol **first, FILE *f) {
 
 	Protocol *akt = NULL,
 		*pom = NULL;
-	int c;
+	int c, i;
 
 	if ((*first) == NULL) {
 
@@ -145,6 +164,34 @@ void nacitaj(Protocol **first, FILE *f) {
 			fscanf(f, "%s", (*first)->ip->tcp->ports[5].name);
 		}
 
+		//naèítanie UDP
+		while ((c = getc(f)) != '\n') {
+			ungetc(c, f);
+			fscanf(f, "%s", (*first)->ip->udp->name);
+			printf("UDP name: %s\n", (*first)->ip->udp->name);
+			fscanf(f, "%d", &(*first)->ip->udp->s_port);
+			fscanf(f, "%d", &(*first)->ip->udp->d_port);
+			fscanf(f, "%d", &(*first)->ip->udp->len);
+			fscanf(f, "%d", &(*first)->ip->udp->udp_value);
+			fscanf(f, "%d", &(*first)->ip->udp->ports[0].num);
+			fscanf(f, "%s", (*first)->ip->udp->ports[0].name);
+		}
+
+		//Naèítanie ICMP
+		while ((c = getc(f)) != '\n') {
+			ungetc(c, f);
+			fscanf(f, "%s", (*first)->ip->icmp->name);
+			fscanf(f, "%d", &(*first)->ip->icmp->type);
+			fscanf(f, "%d", &(*first)->ip->icmp->len);
+			fscanf(f, "%d", &(*first)->ip->icmp->icmp_value);
+			printf("ICMP value: %d\n", (*first)->ip->icmp->icmp_value);
+			for (i = 0; i <= 5; i++) {
+				fscanf(f, "%d", &(*first)->ip->icmp->code[i].num);
+				fscanf(f, "%s", (*first)->ip->icmp->code[i].name);
+				printf("NUM: %d\n", (*first)->ip->icmp->code[i].num);
+			}
+		}
+
 
 		akt = (*first);
 		//akt = akt->next;
@@ -158,7 +205,7 @@ void nacitaj(Protocol **first, FILE *f) {
 			while ((c = getc(f)) != EOF) {
 				ungetc(c, f);
 				fscanf(f, "%s ", (akt)->name);
-				printf("%s\n", (akt)->name);
+				printf("IEEE -%s\n", (akt)->name);
 
 				fscanf(f, "%d", &(akt)->dest);
 				fscanf(f, "%d", &(akt)->src);
@@ -291,7 +338,6 @@ void Point_1(pcap_t *f, struct pcap_pkthdr *hdr, const u_char *pkt_data, int *co
 		//Odriakovanie
 		printf("\n\n");
 	}
-	printf("Num %d\n", num);
 	(*count) = num;
 }
 
@@ -738,6 +784,7 @@ void Vypis_Telnet(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, 
 							printf("\n");
 						}
 					}
+					putchar('\n');
 					putchar('\n');
 				}
 			}
