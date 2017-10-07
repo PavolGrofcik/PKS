@@ -13,6 +13,7 @@
 
 //Definovanie pre v˝pis riadku po 16 B
 #define LINE_LEN 16 
+#define ARRAY_LEN 2
 
 //ätrukt˙ra p·rov pre port + n·zov
 typedef struct  pairs {
@@ -25,7 +26,7 @@ typedef struct arp {
 	char name[4];		//ARP
 	int operation;		//PozÌcia - operation
 	int len;			//Dlzka operacie
-	Pairs echo[2];			//Echo - Reply/Request
+	Pairs echo[2];		//Echo - Reply/Request
 }Arp;
 
 //ätrukt˙ra pre TCP
@@ -120,10 +121,11 @@ void nacitaj(Protocol **first, FILE *f) {
 		while ((c = getc(f)) != '\n') {
 			ungetc(c, f);
 			fscanf(f, "%s", (*first)->ip->tcp->name);
-			printf("tcp name: %s\n", (*first)->ip->tcp->name);		//vypis
+			//printf("tcp name: %s\n", (*first)->ip->tcp->name);		//vypis IP nazov
 			fscanf(f, "%d", &(*first)->ip->tcp->s_port);
 			fscanf(f, "%d", &(*first)->ip->tcp->d_port);
 			fscanf(f, "%d", &(*first)->ip->tcp->len_p);
+			//spraviù cez for loop
 			fscanf(f, "%d", &(*first)->ip->tcp->ports[0].num);
 			fscanf(f, "%s", (*first)->ip->tcp->ports[0].name);
 			fscanf(f, "%d", &(*first)->ip->tcp->ports[1].num);
@@ -185,14 +187,17 @@ void vypis_prot(Protocol *first) {
 }
 
 //Zmazanie sp·janÈho zoznamu
-void delete(Protocol *f) {
-	Protocol *akt;
+void delete_list(Protocol *f) {
+	Protocol *akt = NULL,
+		*pom = NULL;
+	pom = f;
 
-	while (f) {
-		akt = f;
-		f = f->next;
+	while (pom) {
+		akt = pom;
+		pom = pom->next;
 		free(akt);
 	}
+	
 }
 
 //Funkcia sl˙ûiaca na v˝pis k bodu Ë. 1
@@ -200,7 +205,7 @@ void Point_1(pcap_t *f, struct pcap_pkthdr *hdr, const u_char *pkt_data, int *co
 
 	//PomocnÈ premennÈ
 	Protocol *akt = NULL;
-	int i, pom;
+	int i, pom, num = 0;
 
 	//nasmerovanie na zaËiatok
 	akt = first;
@@ -208,14 +213,12 @@ void Point_1(pcap_t *f, struct pcap_pkthdr *hdr, const u_char *pkt_data, int *co
 	if (akt == NULL) {
 		return;
 	}
-	else if ((*count) != 0) {
-		(*count) = 0;
-	}
+	
 
 	while ((pcap_next_ex(f, &hdr, &pkt_data)) >= 0) {
 
 		//Z·kladnÈ inform·cie o packete
-		printf("Ramec: %d\n", ++(*count));
+		printf("Ramec: %d\n", ++(num));
 		printf("Dlzka ramca poskytnuteho pcap API: %d\n", hdr->caplen);
 		printf("Dlza ramca prenasaneho po mediu: %d\n", hdr->len < 60 ? 64 : hdr->len + 4);
 		//nasmerovanie na zaËiatok Linked list-u
@@ -283,55 +286,138 @@ void Point_1(pcap_t *f, struct pcap_pkthdr *hdr, const u_char *pkt_data, int *co
 		//Odriakovanie
 		printf("\n\n");
 	}
+	printf("Num %d\n", num);
+	(*count) = num;
 }
 
-void vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char *pkt_data) {
+
+void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char *pkt_data,int n) {
 
 	Protocol *akt = first;
-	int i, j = 0, max = 0, pom, delimiter;
+	int i, j = 0, max = 0,delimiter;
 	char errbuff[20];
-	int count = 0, frame;
+	int count = 0, frame, tmp = 0;
+	int **arr = NULL;
+	int *space = NULL;
 
-	pom = akt->ip->d_ip + akt->ip->len;
+
 	delimiter = akt->ip->s_ip + 4;
 
 
-	printf("IP adresy vysielajucich uzlov:\n");
+	//ERROOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOR!!! sk˙s stlaËiù 3 krat po sebe tlacidlo 1 a vyhodÌ error (Local windows debugger
+	//alokujeme 2d pole na zapamatanie IP adries  a ich odvysielanych bajtov
+	if ((arr = (int**)malloc(n * sizeof(int*))) == NULL) {
+		printf("Nedostatok pamate\n");
+		return;
+	}
 
+	for (i = 0; i < 30; i++) {
+		space = (int *)calloc(ARRAY_LEN*n,sizeof(int));
+	}
+
+	//nasmerujeme pole smernikov ûvonzÌkov
+	for (i = 0; i < n; ++i) {
+		printf("I je %d\n", i);
+		arr[i] = space + i*ARRAY_LEN;
+	}
+
+
+	printf("IP adresy vysielajucich uzlov:\n");
+	//Len Src Ip adresy
 	while ((pcap_next_ex(f, &hdr, &pkt_data)) >= 0) {
+
 		count++;
-		if (max < hdr->caplen) {
+
+		/*if (max < hdr->caplen) {
 			max = hdr->caplen;
 			frame = count;
-		}
-		for (i = akt->ip->s_ip; i < pom; i++) {
-			if (i == delimiter) {
-				printf("\n");
+		}*/
+
+		for (i = akt->ip->s_ip; i < delimiter; i++) {
+			if (i == (delimiter-1)) {
+				tmp += pkt_data[i];
+				//arr[j] = tmp;
+				printf("%d\n", pkt_data[i]);
+				break;
 			}
+			tmp += pkt_data[i];
 			printf("%d. ", pkt_data[i]);
 		}
-		printf("\n....\n");
+		
+		//Priradenie IP s velkostou
+		arr[count - 1][0] = tmp;			//IP adresa
+		arr[count - 1][1] = hdr->caplen;	//Hodnota po mediu
+		//odriadokovanie
+		putchar('\n');
+		tmp = 0;
 
+	}
+
+	frame= arr[0][0];		//ip adresa
+	delimiter = arr[0][1];	//hodnota bajtov
+	for (i = 1; i < n; i++) {
+		if (arr[i][0] == frame) {			//def ip
+			delimiter += arr[i][1];		//def max
+		}
+	}
+
+	for (i = 1; i < n; i++) {
+		max = arr[i][1];
+		tmp = arr[i][0];
+		for (j = i + 1; j < n; j++) {
+			if (arr[j][0] == tmp) {
+				max += arr[j][1];
+			}
+		}
+		if (max > delimiter) {
+			delimiter = max;
+			frame = tmp;
+		}
 	}
 
 	//rewindovanie f
 	pcap_close(f);
 	f = (pcap_open_offline("eth-8.pcap", errbuff));
 	count = 0;
-
+	j = 0;
+	max = akt->ip->len + akt->ip->s_ip;
 	printf("Adresa uzla s najvacsim poctom odvysielanych bajtov:\n");
 
-	//najdi bug
 	while ((pcap_next_ex(f, &hdr, &pkt_data)) >= 0) {
-		count++;
-		if (count == frame) {
-			for (i = akt->ip->s_ip; i < delimiter; i++) {
-				printf("%d. ", pkt_data[i]);
+
+	
+			for (i = akt->ip->s_ip; i < max; i++) {
+				count += pkt_data[i];
 			}
-			printf("%d Bajtov\n", max);
-			putchar('\n');
-		}
+			if (count == frame) {
+
+				//vypis Ip
+				for (i = akt->ip->s_ip; i < max; i++) {
+					if (i == (max - 1)) {
+						printf("%d", pkt_data[i]);
+						printf("\t %d Bajtov\n", delimiter);
+						j = 1;
+						break;
+					}
+					printf("%d. ", pkt_data[i]);
+				}
+				break;
+			}
+			count = 0;
 	}
+
+	//Dealokacia
+
+	for (i = 0; i < n; i++) {
+		arr[i] = NULL;
+	}
+	free(space);
+	free(arr);
+	arr = NULL;
+	
+	//Rewindovanie sp·janeho zoznamu na zaËiatok
+	pcap_close(f);
+	f = (pcap_open_offline("eth-8.pcap", errbuff));
 
 }
 
@@ -346,11 +432,10 @@ int main(void) {
 	struct pcap_pkthdr *header = NULL;
 
 	FILE *r = NULL;
-	Protocol *first = NULL
-		;
+	Protocol *first = NULL;
 
 
-
+	//Otvorenie s˙borov na anal˝zu
 	if ((f = (pcap_open_offline("eth-8.pcap", errbuff))) == NULL ||
 		(r = fopen("Linkframe.txt", "r")) == NULL) {
 
@@ -366,24 +451,21 @@ int main(void) {
 
 
 		//kontroln˝ v˝pis
-		vypis_prot(first);
+		//vypis_prot(first);
 		while ((c = getchar()) != 'k') {
 
 			switch (c) {
 				//Bod c. 1
 			case '1':Point_1(f, header, pktdata, &count, first), pcap_close(f),
-				f = (pcap_open_offline("eth-8.pcap", errbuff)); vypis_ip(f, first, header, pktdata);
+				(f = (pcap_open_offline("eth-8.pcap", errbuff))),
+				Vypis_ip(f, first, header, pktdata, count);
 				break;
 				//Bod 3 - a:i
-			case 'a':printf("Hello world guys!\n");
+			case 'a':printf("Hello world guys!\n"); break;
 			}
-
-			//rewindovanie Packetov
-			//pcap_close(f);
-			//f = (pcap_open_offline("eth.8.pcap", errbuff));
 		}
 
-		//Po dokonËenÌ je nutnÈ s˙bory spr·vne zavrieù
+
 		pcap_close(f);
 
 		if (fclose(r) == EOF) {
@@ -391,9 +473,10 @@ int main(void) {
 		}
 
 		//Vr·tenie alokovanej pamate OS
-		delete(first);
-		free(pktdata, header);
+		delete_list(first);
+		//free(pktdata, header);
+		first = NULL;
+		return 0;
 	}
-
-	return 0;
+	//exit(0);
 }
