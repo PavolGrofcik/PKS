@@ -1,5 +1,5 @@
 Ethernet-II	 6	6	2	0600	0800	0806
-ARP	19	2	1 Request	2	Reply
+ARP	21	2	22	28	32	38	6	4	1	Request	2	Reply
 IPv4	14	26	30	4	23
 TCP	34	36	2	6	20 ftp-data	21	ftp-control	22	ssh	23	telnet	80 http	443	https
 UDP 34	36	2	17	69	tftp

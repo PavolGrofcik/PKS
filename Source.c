@@ -42,7 +42,13 @@ typedef struct icmp {
 typedef struct arp {
 	char name[4];		//ARP
 	int operation;		//PozÌcia - operation
-	int len;			//Dlzka operacie
+	int op_len;			//Dlzka operacie
+	int src_mac;		//Src MAC pozicia
+	int src_ip;			//Src IP pozicia
+	int dst_mac;		//Dst MAC pozicia
+	int dst_ip;			//Dst IP pozicia
+	int mac_len;		//Dlzka MAC adresy
+	int ip_len;			//Dlzka IP adresy
 	Pairs echo[2];		//Echo - Reply/Request
 }Arp;
 
@@ -99,7 +105,7 @@ void nacitaj(Protocol **first, FILE *f) {
 		//Nasmerovanie smernÌka do NULL
 		(*first)->next = NULL;
 
-		//nacÌtanie zo s˙boru
+		//naËÌtanie Ethernet protokolu zo s˙boru
 		while ((c = getc(f)) != '\n') {
 			ungetc(c, f);
 			fscanf(f, "%s ", (*first)->name);
@@ -113,13 +119,19 @@ void nacitaj(Protocol **first, FILE *f) {
 			fscanf(f, "%d", &(*first)->arr[2]);
 
 		}
-		//naËÌtanie potrebn˝ch ˙dajov do subprotokolov pre IP/ARP
-		//arp v Ethernete
+		//naËÌtanie ARP
 		while ((c = getc(f)) != '\n') {
 			ungetc(c, f);
 			fscanf(f, "%s", (*first)->arp->name);
 			fscanf(f, "%d", &(*first)->arp->operation);
-			fscanf(f, "%d", &(*first)->arp->len);
+			fscanf(f, "%d", &(*first)->arp->op_len);
+			fscanf(f, "%d", &(*first)->arp->src_mac);
+			fscanf(f, "%d", &(*first)->arp->src_ip);
+			fscanf(f, "%d", &(*first)->arp->dst_mac);
+			fscanf(f, "%d", &(*first)->arp->dst_ip);
+			fscanf(f, "%d", &(*first)->arp->mac_len);
+			fscanf(f, "%d", &(*first)->arp->ip_len);
+			printf("Dlzka ip je: %d\n", (*first)->arp->ip_len);
 			fscanf(f, "%d", &(*first)->arp->echo[0].num);
 			fscanf(f, "%s", (*first)->arp->echo[0].name);
 			fscanf(f, "%d", &(*first)->arp->echo[1].num);
@@ -250,7 +262,7 @@ void delete_list(Protocol *f) {
 		pom = pom->next;
 		free(akt);
 	}
-	
+
 }
 
 //Funkcia sl˙ûiaca na v˝pis k bodu Ë. 1
@@ -266,7 +278,7 @@ void Point_1(pcap_t *f, struct pcap_pkthdr *hdr, const u_char *pkt_data, int *co
 	if (akt == NULL) {
 		return;
 	}
-	
+
 
 	while ((pcap_next_ex(f, &hdr, &pkt_data)) >= 0) {
 
@@ -339,10 +351,10 @@ void Point_1(pcap_t *f, struct pcap_pkthdr *hdr, const u_char *pkt_data, int *co
 }
 
 
-void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char *pkt_data,int n) {
+void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char *pkt_data, int n) {
 
 	Protocol *akt = first;
-	int i, j = 0, max = 0,delimiter;
+	int i, j = 0, max = 0, delimiter;
 	char errbuff[20];
 	int count = 0, frame, tmp = 0;
 
@@ -359,7 +371,7 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 	}
 
 	for (i = 0; i < 30; i++) {
-		space = (int *)calloc(ARRAY_LEN*n,sizeof(int));
+		space = (int *)calloc(ARRAY_LEN*n, sizeof(int));
 	}
 
 	//Nasmerovanie poæa smernikov ûvonzÌkov
@@ -380,7 +392,7 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 		}*/
 
 		for (i = akt->ip->s_ip; i < delimiter; i++) {
-			if (i == (delimiter-1)) {
+			if (i == (delimiter - 1)) {
 				tmp += pkt_data[i];
 				//arr[j] = tmp;
 				printf("%d\n", pkt_data[i]);
@@ -389,7 +401,7 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 			tmp += pkt_data[i];
 			printf("%d. ", pkt_data[i]);
 		}
-		
+
 		//Priradenie IP s velkostou
 		arr[count - 1][0] = tmp;			//IP adresa
 		arr[count - 1][1] = hdr->caplen;	//Hodnota po mediu(Bajty)
@@ -398,7 +410,7 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 	}
 
 
-	frame= arr[0][0];						//Default IP adresa
+	frame = arr[0][0];						//Default IP adresa
 	delimiter = arr[0][1];					//Default hodnota bajtov
 	for (i = 1; i < n; i++) {
 		if (arr[i][0] == frame) {			//def ip
@@ -425,7 +437,7 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 
 	//Rewindovanie pcap_t (f)
 	pcap_close(f);
-	f = (pcap_open_offline("eth-9.pcap", errbuff));
+	f = (pcap_open_offline("eth-8.pcap", errbuff));
 	count = 0;
 
 	//Hranica IP
@@ -435,25 +447,25 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 	//CyklÌme na zistenie IP adresy pre dan˝ velkost
 	while ((pcap_next_ex(f, &hdr, &pkt_data)) >= 0) {
 
-	
-			for (i = akt->ip->s_ip; i < max; i++) {
-				count += pkt_data[i];
-			}
-			if (count == frame) {
 
-				//vypis Ip
-				for (i = akt->ip->s_ip; i < max; i++) {
-					if (i == (max - 1)) {
-						printf("%d", pkt_data[i]);
-						printf("\t %d Bajtov\n", delimiter);
-						j = 1;
-						break;
-					}
-					printf("%d. ", pkt_data[i]);
+		for (i = akt->ip->s_ip; i < max; i++) {
+			count += pkt_data[i];
+		}
+		if (count == frame) {
+
+			//vypis Ip
+			for (i = akt->ip->s_ip; i < max; i++) {
+				if (i == (max - 1)) {
+					printf("%d", pkt_data[i]);
+					printf("\t %d Bajtov\n", delimiter);
+					j = 1;
+					break;
 				}
-				break;
+				printf("%d. ", pkt_data[i]);
 			}
-			count = 0;
+			break;
+		}
+		count = 0;
 	}
 
 	//Dealokacia - vr·tenie "poûiËan˝ch" bajtov OS
@@ -470,8 +482,8 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 
 //V˝pis pre HTTP komunik·cie
 void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int count, Protocol *first) {
-	
-	int i, position, prot_pos, tmp=0, pom = 0;
+
+	int i, position, prot_pos, tmp = 0, pom = 0;
 	int delimiter, delimiter2;
 	int http_val;
 	Protocol *akt = first;
@@ -485,16 +497,16 @@ void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, in
 
 	//Prechadzanie paketmi a urËenie HTTP
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
-	
+
 		tmp++;																				//»Ìslo r·mca
 		//Zistenie Ëi sa jedn· o IPv4 (0800)
 		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1])) {
 
 			//Protokol HTTP sa nach·dza na na relaËnej vrtsve podprotokolu - TCP(06)
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
-				
+
 				//Hodnota cieloveho portu musÌ byù 80(https) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->tcp->d_port+1] == http_val || pktdata[akt->ip->tcp->s_port +1] == http_val) {
+				if (pktdata[akt->ip->tcp->d_port + 1] == http_val || pktdata[akt->ip->tcp->s_port + 1] == http_val) {
 					printf("Ramec: %d\n", tmp);
 					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
 					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
@@ -533,7 +545,7 @@ void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, in
 					//Dst IP
 					printf("Cielova IP adresa: ");
 					for (i = delimiter; i < delimiter + akt->ip->len; i++) {
-						if (i == (delimiter + akt->ip->len -1)) {
+						if (i == (delimiter + akt->ip->len - 1)) {
 							printf("%d\n", pktdata[i]);
 							break;
 						}
@@ -615,7 +627,7 @@ void Vypis_HTTPS(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, i
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
 
 				//Hodnota cieloveho portu musÌ byù 443(https) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->tcp->d_port + 1] == https_val || pktdata[akt->ip->tcp->s_port+1] == https_val) {
+				if (pktdata[akt->ip->tcp->d_port + 1] == https_val || pktdata[akt->ip->tcp->s_port + 1] == https_val) {
 					printf("Ramec: %d\n", tmp);
 					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
 					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
@@ -733,7 +745,7 @@ void Vypis_Telnet(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, 
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
 
 				//Hodnota cieloveho portu musÌ byù 23(TELNET) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->tcp->d_port + 1] == telnet_val || pktdata[delimiter2 -1] == telnet_val) {
+				if (pktdata[akt->ip->tcp->d_port + 1] == telnet_val || pktdata[delimiter2 - 1] == telnet_val) {
 					printf("Ramec: %d\n", tmp);
 					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
 					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
@@ -852,7 +864,7 @@ void Vypis_SSH(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pro
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
 
 				//Hodnota cieloveho portu musÌ byù 80(https) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->tcp->d_port + 1] == SSH_val || pktdata[delimiter2-1] == SSH_val) {
+				if (pktdata[akt->ip->tcp->d_port + 1] == SSH_val || pktdata[delimiter2 - 1] == SSH_val) {
 					printf("Ramec: %d\n", tmp);
 					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
 					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
@@ -916,7 +928,7 @@ void Vypis_SSH(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pro
 					printf("%d\n", pom);
 					//Dst Port
 					printf("Cielovy port: ");
-					for (i = delimiter2; i < delimiter2 +2; i++) {
+					for (i = delimiter2; i < delimiter2 + 2; i++) {
 						if (i == akt->ip->tcp->d_port) {
 							pom = pktdata[i] * 256;
 						}
@@ -971,7 +983,7 @@ void Vypis_FTP_Control(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktd
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
 
 				//Hodnota cieloveho portu musÌ byù 80(https) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->tcp->d_port + 1] == ftp_val || pktdata[delimiter2-1] == ftp_val) {
+				if (pktdata[akt->ip->tcp->d_port + 1] == ftp_val || pktdata[delimiter2 - 1] == ftp_val) {
 					printf("Ramec: %d\n", tmp);
 					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
 					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
@@ -1035,7 +1047,7 @@ void Vypis_FTP_Control(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktd
 					printf("%d\n", pom);
 					//Dst
 					printf("Cielovy port: ");
-					for (i = delimiter2; i < delimiter2 +2; i++) {
+					for (i = delimiter2; i < delimiter2 + 2; i++) {
 						if (i == akt->ip->tcp->d_port) {
 							pom = pktdata[i] * 256;
 						}
@@ -1089,7 +1101,7 @@ void Vypis_FTP_Data(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
 
 				//Hodnota cieloveho portu musÌ byù 20(ftp - data) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->tcp->d_port + 1] == ftpd_val || pktdata[delimiter2-1] == ftpd_val) {
+				if (pktdata[akt->ip->tcp->d_port + 1] == ftpd_val || pktdata[delimiter2 - 1] == ftpd_val) {
 					printf("Ramec: %d\n", tmp);
 					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
 					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
@@ -1153,7 +1165,7 @@ void Vypis_FTP_Data(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata
 					printf("%d\n", pom);
 					//Dst
 					printf("Cielovy port: ");
-					for (i = delimiter2; i < delimiter2+2; i++) {
+					for (i = delimiter2; i < delimiter2 + 2; i++) {
 						if (i == akt->ip->tcp->d_port) {
 							pom = pktdata[i] * 256;
 						}
@@ -1206,10 +1218,10 @@ void Vypis_TFTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pr
 			if (pktdata[prot_pos] == akt->ip->udp->udp_value) {
 
 				//Hodnota cieloveho portu musÌ byù 69(tftp) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->udp->d_port+1] == akt->ip->udp->ports[0].num ||
+				if (pktdata[akt->ip->udp->d_port + 1] == akt->ip->udp->ports[0].num ||
 					((pktdata[akt->ip->udp->s_port] * 256 + pktdata[akt->ip->udp->s_port + 1]) == def_port) ||
 					((pktdata[akt->ip->udp->d_port] * 256 + pktdata[akt->ip->udp->d_port + 1]) == def_port)) {
-					
+
 					printf("Ramec: %d\n", tmp);
 					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
 					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
@@ -1276,7 +1288,7 @@ void Vypis_TFTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pr
 					printf("%d\n", pom);
 					//Dst
 					printf("Cielovy port: ");
-					for (i = akt->ip->udp->d_port; i < akt->ip->udp->d_port+2; i++) {
+					for (i = akt->ip->udp->d_port; i < akt->ip->udp->d_port + 2; i++) {
 						if (i == akt->ip->tcp->d_port) {
 							pom = pktdata[i] * 256;
 						}
@@ -1334,88 +1346,128 @@ void Vypis_ICMP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pr
 
 				//V˝pis komunik·cie podæa ICMP - code operation
 				//Overenie Ëi sa jedn· o platn˝ kÛd v r·mc ICMP
-					for (i = 0; i < 6; i++) {
-						if (pktdata[akt->ip->icmp->type] == akt->ip->icmp->code[i].num) {
-							printf("Ramec: %d\n", tmp);
-							printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
-							printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
-							printf("%s\n", akt->name);
+				for (i = 0; i < 6; i++) {
+					if (pktdata[akt->ip->icmp->type] == akt->ip->icmp->code[i].num) {
+						printf("Ramec: %d\n", tmp);
+						printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
+						printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
+						printf("%s\n", akt->name);
 
 
-							//MAC Adresy
-							printf("Zdrojova MAC adresa: ");
-							for (i = akt->dest; i < akt->dest + akt->src; i++) {
-								if (i == 11) {
-									printf("%.2x\n", pktdata[i]);
-									break;
-								}
-								printf("%.2x ", pktdata[i]);
+						//MAC Adresy
+						printf("Zdrojova MAC adresa: ");
+						for (i = akt->dest; i < akt->dest + akt->src; i++) {
+							if (i == 11) {
+								printf("%.2x\n", pktdata[i]);
+								break;
 							}
-
-							printf("Cielova MAC adresa: ");
-							for (i = 0; i < akt->dest; i++) {
-								if (i == 5) {
-									printf("%.2x\n", pktdata[i]);
-									break;
-								}
-								printf("%.2x ", pktdata[i]);
-							}
-
-							//IPv4
-							printf("%s\n", akt->ip->name);
-							printf("Zdrojova IP adresa: ");
-							//Src IP
-							for (i = akt->ip->s_ip; i < delimiter; i++) {
-								if (i == delimiter - 1) {
-									printf("%d\n", pktdata[i]);
-									break;
-								}
-								printf("%d. ", pktdata[i]);
-							}
-							//Dst IP
-							printf("Cielova IP adresa: ");
-							for (i = delimiter; i < delimiter + akt->ip->len; i++) {
-								if (i == (delimiter + akt->ip->len - 1)) {
-									printf("%d\n", pktdata[i]);
-									break;
-								}
-								printf("%d. ", pktdata[i]);
-							}
-
-							//ICMP name
-							printf("%s\n", akt->ip->icmp->name);
-
-							//Code -operation Echo, Time exceeded Reply .... decimalna s˙stava(bajty packetu)
-							switch (pktdata[akt->ip->icmp->type]) {
-							case 0: printf("%s\n", akt->ip->icmp->code[0].name); break;
-							case 3: printf("%s\n", akt->ip->icmp->code[1].name); break;
-							case 5: printf("%s\n", akt->ip->icmp->code[2].name); break;
-							case 8: printf("%s\n", akt->ip->icmp->code[3].name); break;
-							case 11: printf("%s\n", akt->ip->icmp->code[4].name); break;
-							case 30: printf("%s\n", akt->ip->icmp->code[5].name); break;
-							}
-							//V˝pis packetu
-							for (i = 1; i <= header->caplen; i++) {
-
-								printf("%.2x ", pktdata[i - 1]);
-
-								if (i % LINE_LEN == 8) {
-									printf("  ");
-								}
-								else if (i % LINE_LEN == 0) {
-									printf("\n");
-								}
-							}
-							putchar('\n');
-							putchar('\n');
-							//ZbytoËne uû necyklujeme keÔ sme uû vypÌsali
-							break;
+							printf("%.2x ", pktdata[i]);
 						}
+
+						printf("Cielova MAC adresa: ");
+						for (i = 0; i < akt->dest; i++) {
+							if (i == 5) {
+								printf("%.2x\n", pktdata[i]);
+								break;
+							}
+							printf("%.2x ", pktdata[i]);
+						}
+
+						//IPv4
+						printf("%s\n", akt->ip->name);
+						printf("Zdrojova IP adresa: ");
+						//Src IP
+						for (i = akt->ip->s_ip; i < delimiter; i++) {
+							if (i == delimiter - 1) {
+								printf("%d\n", pktdata[i]);
+								break;
+							}
+							printf("%d. ", pktdata[i]);
+						}
+						//Dst IP
+						printf("Cielova IP adresa: ");
+						for (i = delimiter; i < delimiter + akt->ip->len; i++) {
+							if (i == (delimiter + akt->ip->len - 1)) {
+								printf("%d\n", pktdata[i]);
+								break;
+							}
+							printf("%d. ", pktdata[i]);
+						}
+
+						//ICMP name
+						printf("%s\n", akt->ip->icmp->name);
+
+						//Code -operation Echo, Time exceeded Reply .... decimalna s˙stava(bajty packetu)
+						switch (pktdata[akt->ip->icmp->type]) {
+						case 0: printf("%s\n", akt->ip->icmp->code[0].name); break;
+						case 3: printf("%s\n", akt->ip->icmp->code[1].name); break;
+						case 5: printf("%s\n", akt->ip->icmp->code[2].name); break;
+						case 8: printf("%s\n", akt->ip->icmp->code[3].name); break;
+						case 11: printf("%s\n", akt->ip->icmp->code[4].name); break;
+						case 30: printf("%s\n", akt->ip->icmp->code[5].name); break;
+						}
+						//V˝pis packetu
+						for (i = 1; i <= header->caplen; i++) {
+
+							printf("%.2x ", pktdata[i - 1]);
+
+							if (i % LINE_LEN == 8) {
+								printf("  ");
+							}
+							else if (i % LINE_LEN == 0) {
+								printf("\n");
+							}
+						}
+						putchar('\n');
+						putchar('\n');
+						//ZbytoËne uû necyklujeme keÔ sme uû vypÌsali
+						break;
 					}
 				}
 			}
 		}
 	}
+}
+
+
+void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int frames, Protocol *first) {
+
+	int Arp_count, Arp_position;
+	int *arr = NULL;
+	char errbuff[10];
+	Protocol *akt = first;
+
+	Arp_count = 0;
+	Arp_position = akt->dest + akt->src;
+
+	while (pcap_next_ex(f, &header, &pktdata) > 0) {
+
+		//Arp protocol je v Ethernet type: 0806
+		if (pktdata[Arp_position] * 100 + pktdata[Arp_position + 1] == akt->arr[2]) {
+			Arp_count++;
+		}
+	}
+
+	if (Arp_count) {
+
+		//Alokujeme pole, do ktorÈho uloûÌme poradovÈ ËÌslo r·mca
+		if ((arr = (int*)malloc(Arp_count * sizeof(int))) == NULL) {
+			printf("Nepodarilo sa alokovaù pamat\n");
+			return;
+		}
+
+		//Rewind pcap_t Linked listu
+		pcap_close(f);
+		f = pcap_open_offline("eth-8.pcap", errbuff);
+
+		//naplnÌme pole 
+	}
+	else
+	{
+		//V subore *.pcap nie s˙ ûiadne protokoly ARP
+		return;
+	}
+}
 
 
 // Ak otvaraö in˝ s˙bor musÌö zmenit v main,switch-rewind point 1 a vypis-IP
@@ -1434,7 +1486,7 @@ int main(void) {
 
 
 	//Otvorenie s˙borov na anal˝zu
-	if ((f = (pcap_open_offline("eth-9.pcap", errbuff))) == NULL ||
+	if ((f = (pcap_open_offline("eth-8.pcap", errbuff))) == NULL ||
 		(r = fopen("Linkframe.txt", "r")) == NULL) {
 
 		//Ak nastane chyba otvorenia s˙borov, program sa ukonËÌ
@@ -1456,7 +1508,7 @@ int main(void) {
 				//Bod c. 1
 			case '1':Point_1(f, header, pktdata, &count, first),
 				pcap_close(f),
-				(f = (pcap_open_offline("eth-9.pcap", errbuff))),
+				(f = (pcap_open_offline("eth-8.pcap", errbuff))),
 				Vypis_ip(f, first, header, pktdata, count);
 				break;
 
@@ -1469,13 +1521,14 @@ int main(void) {
 			case 'f':Vypis_FTP_Data(f, header, pktdata, first); break;				//V˝pis pre FTP-Data
 			case 'g':Vypis_TFTP(f, header, pktdata, first); break;					//V˝pis pre TFTP
 			case 'h':Vypis_ICMP(f, header, pktdata, first); break;					//V˝pis pre ICMP
+			case 'i':Vypis_Arp(f, header, pktdata, count, first); break;			//V˝pis pre ARP 
 
 			}
 
-			//rewindovanie
+			//Rewind pcap_t linked list
 			pcap_close(f);
-			f = (pcap_open_offline("eth-9.pcap", errbuff));
-	
+			f = (pcap_open_offline("eth-8.pcap", errbuff));
+
 		}
 
 
