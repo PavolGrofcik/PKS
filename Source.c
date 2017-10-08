@@ -280,26 +280,25 @@ void Point_1(pcap_t *f, struct pcap_pkthdr *hdr, const u_char *pkt_data, int *co
 
 		//UrËenie typu na Linkovej vrstve
 		if (pkt_data[pom] >= akt->arr[0] / 100) {
-			printf("%s\n", akt->name);
+			printf("%s\n", akt->name);						//Ethernet II
 		}
 		else
 		{
 			akt = akt->next;
-			printf("%s -", akt->name);
+			printf("%s -", akt->name);						//IEEE 802.3
 			pom += akt->len;
 
-			if (pkt_data[pom] == akt->arr[0]) {
+			if (pkt_data[pom] == akt->arr[0]) {				//ff ff (Raw)
 				printf("Raw\n");
 			}
 			else if (pkt_data[pom] == akt->arr[1]) {
-				printf("LLC/SNAP\n");
+				printf("LLC/SNAP\n");						//aa aa (SNAP)
 			}
 			else
 			{
-				printf("LLC\n");
+				printf("LLC\n");							//LLC
 			}
 		}
-
 
 		//V˝pis MAC adries
 		printf("Zdrojova MAC adresa: ");
@@ -320,9 +319,6 @@ void Point_1(pcap_t *f, struct pcap_pkthdr *hdr, const u_char *pkt_data, int *co
 			printf("%.2x ", pkt_data[i]);
 		}
 
-
-
-
 		//Vypis celÈho packetu
 		for (i = 1; i <= hdr->caplen; i++) {
 
@@ -336,10 +332,10 @@ void Point_1(pcap_t *f, struct pcap_pkthdr *hdr, const u_char *pkt_data, int *co
 			}
 		}
 
-		//Odriakovanie
+		//Odriakovanie pre lepöiu Ëitateænost
 		printf("\n\n");
 	}
-	(*count) = num;
+	(*count) = num;									//PoËet vöetk˝ch r·mcov v danom s˙bore
 }
 
 
@@ -477,30 +473,34 @@ void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, in
 	
 	int i, position, prot_pos, tmp=0, pom = 0;
 	int delimiter, delimiter2;
+	int http_val;
 	Protocol *akt = first;
 
-	//nastavenie pozÌcie na 12 B (zaËiatok Ipv4)
+	//nastavenie pozÌciÌ 
 	position = akt->dest + akt->src;//12. B
 	prot_pos = akt->ip->prot_pos;
 	delimiter = akt->ip->d_ip;
 	delimiter2 = akt->ip->tcp->d_port;
+	http_val = akt->ip->tcp->ports[4].num;			//». portu - 80 (Dec)
 
 	//Prechadzanie paketmi a urËenie HTTP
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
-		tmp++;
+	
+		tmp++;																				//»Ìslo r·mca
 		//Zistenie Ëi sa jedn· o IPv4 (0800)
 		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1])) {
 
-			//Protokol HTTP sa nach·dza na na relaËnej vrtsve protokolu - TCP(06)
+			//Protokol HTTP sa nach·dza na na relaËnej vrtsve podprotokolu - TCP(06)
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
 				
 				//Hodnota cieloveho portu musÌ byù 80(https) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->tcp->d_port+1] == akt->ip->tcp->ports[4].num) {
+				if (pktdata[akt->ip->tcp->d_port+1] == http_val || pktdata[akt->ip->tcp->s_port +1] == http_val) {
 					printf("Ramec: %d\n", tmp);
 					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
 					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
 					printf("%s\n", akt->name);
 
+					//MAC adresy
 					printf("Zdrojova MAC adresa: ");
 					for (i = akt->dest; i < akt->dest + akt->src; i++) {
 						if (i == 11) {
@@ -521,8 +521,8 @@ void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, in
 
 					//IPv4
 					printf("%s\n", akt->ip->name);
-					printf("Zdrojova IP adresa: ");
 					//Src IP
+					printf("Zdrojova IP adresa: ");
 					for (i = akt->ip->s_ip; i < delimiter; i++) {
 						if (i == delimiter - 1) {
 							printf("%d\n", pktdata[i]);
@@ -540,11 +540,11 @@ void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, in
 						printf("%d. ", pktdata[i]);
 					}
 
-					//TCP
+					//TCP name
 					printf("%s\n", akt->ip->tcp->name);
 
 					//Porty
-					//Src
+					//Src Port
 					pom = 0;
 					printf("Zdrojovy port: ");
 					for (i = akt->ip->tcp->s_port; i < delimiter2; i++) {
@@ -557,8 +557,18 @@ void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, in
 						}
 					}
 					printf("%d\n", pom);
-					//Dst
-					printf("Cielovy port: %d\n", akt->ip->tcp->ports[4].num);
+					//Dst Port
+					printf("Cielovy port: ");
+					for (i = delimiter2; i < delimiter2 + 2; i++) {
+						if (i == akt->ip->tcp->d_port) {
+							pom = pktdata[i] * 256;
+						}
+						else
+						{
+							pom += pktdata[i];
+						}
+					}
+					printf("%d\n", pom);
 
 					//Vypis Bytov(packetu)
 					for (i = 1; i <= header->caplen; i++) {
@@ -573,6 +583,7 @@ void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, in
 						}
 					}
 					putchar('\n');
+					putchar('\n');
 				}
 			}
 		}
@@ -585,12 +596,14 @@ void Vypis_HTTPS(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, i
 	int i, position, prot_pos, tmp = 0, pom = 0;
 	int delimiter, delimiter2;
 	Protocol *akt = first;
+	int https_val;
 
 	//nastavenie pozÌcie na 12 B (zaËiatok Ipv4)
 	position = akt->dest + akt->src;//12. B
 	prot_pos = akt->ip->prot_pos;
 	delimiter = akt->ip->d_ip;
 	delimiter2 = akt->ip->tcp->d_port;
+	https_val = akt->ip->tcp->ports[5].num;
 
 	//Prechadzanie paketmi a urËenie HTTPS
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
@@ -601,8 +614,8 @@ void Vypis_HTTPS(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, i
 			//Protokol HTTP sa nach·dza na na relaËnej vrtsve protokolu - TCP(06)
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
 
-				//Hodnota cieloveho portu musÌ byù 80(https) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->tcp->d_port + 1] == akt->ip->tcp->ports[5].num) {
+				//Hodnota cieloveho portu musÌ byù 443(https) Dst port(pozicia druha tj(36+1)==37
+				if (pktdata[akt->ip->tcp->d_port + 1] == https_val || pktdata[akt->ip->tcp->s_port+1] == https_val) {
 					printf("Ramec: %d\n", tmp);
 					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
 					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
@@ -665,8 +678,17 @@ void Vypis_HTTPS(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, i
 					}
 					printf("%d\n", pom);
 					//Dst
-					printf("Cielovy port: %d\n", akt->ip->tcp->ports[5].num);
-
+					printf("Cielovy port: ");
+					for (i = delimiter2; i < delimiter2 + 2; i++) {
+						if (i == akt->ip->tcp->d_port) {
+							pom = pktdata[i] * 256;
+						}
+						else
+						{
+							pom += pktdata[i];
+						}
+					}
+					printf("%d\n", pom);			//Cielov˝ port
 					//Vypis Bytov(packetu)
 					for (i = 1; i <= header->caplen; i++) {
 
@@ -679,6 +701,7 @@ void Vypis_HTTPS(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, i
 							printf("\n");
 						}
 					}
+					putchar('\n');
 					putchar('\n');
 				}
 			}
@@ -904,12 +927,14 @@ void Vypis_FTP_Control(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktd
 	int i, position, prot_pos, tmp = 0, pom = 0;
 	int delimiter, delimiter2;
 	Protocol *akt = first;
+	int ftp_val;
 
 	//nastavenie pozÌcie na 12 B (zaËiatok Ipv4)
 	position = akt->dest + akt->src;//12. B
 	prot_pos = akt->ip->prot_pos;
 	delimiter = akt->ip->d_ip;
 	delimiter2 = akt->ip->tcp->d_port;
+	ftp_val = akt->ip->tcp->ports[1].num;
 
 	//Prechadzanie paketmi a urËenie HTTPS
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
@@ -921,7 +946,7 @@ void Vypis_FTP_Control(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktd
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
 
 				//Hodnota cieloveho portu musÌ byù 80(https) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->tcp->d_port + 1] == akt->ip->tcp->ports[1].num) {
+				if (pktdata[akt->ip->tcp->d_port + 1] == ftp_val || pktdata[delimiter2-1] == ftp_val) {
 					printf("Ramec: %d\n", tmp);
 					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
 					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
@@ -984,8 +1009,17 @@ void Vypis_FTP_Control(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktd
 					}
 					printf("%d\n", pom);
 					//Dst
-					printf("Cielovy port: %d\n", akt->ip->tcp->ports[1].num);
-
+					printf("Cielovy port: ");
+					for (i = delimiter2; i < delimiter2 +2; i++) {
+						if (i == akt->ip->tcp->d_port) {
+							pom = pktdata[i] * 256;
+						}
+						else
+						{
+							pom += pktdata[i];
+						}
+					}
+					printf("%d\n", pom);
 					//Vypis Bytov(packetu)
 					for (i = 1; i <= header->caplen; i++) {
 
@@ -1387,7 +1421,7 @@ int main(void) {
 			case 'e':Vypis_FTP_Control(f, header, pktdata, first); break;			//V˝pis pre FTP-Control
 			case 'f':Vypis_FTP_Data(f, header, pktdata, first); break;				//V˝pis pre FTP-Data
 			case 'g':Vypis_TFTP(f, header, pktdata, first); break;					//V˝pis pre TFTP
-			case 'h':Vypis_ICMP(f, header, pktdata, first); break;			//Otestovaù
+			case 'h':Vypis_ICMP(f, header, pktdata, first); break;					//V˝pis pre ICMP
 
 			}
 
