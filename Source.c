@@ -109,8 +109,6 @@ void nacitaj(Protocol **first, FILE *f) {
 		while ((c = getc(f)) != '\n') {
 			ungetc(c, f);
 			fscanf(f, "%s ", (*first)->name);
-			printf("%s\n", (*first)->name);
-
 			fscanf(f, "%d", &(*first)->dest);
 			fscanf(f, "%d", &(*first)->src);
 			fscanf(f, "%d", &(*first)->len);
@@ -131,7 +129,6 @@ void nacitaj(Protocol **first, FILE *f) {
 			fscanf(f, "%d", &(*first)->arp->dst_ip);
 			fscanf(f, "%d", &(*first)->arp->mac_len);
 			fscanf(f, "%d", &(*first)->arp->ip_len);
-			printf("Dlzka ip je: %d\n", (*first)->arp->ip_len);
 			fscanf(f, "%d", &(*first)->arp->echo[0].num);
 			fscanf(f, "%s", (*first)->arp->echo[0].name);
 			fscanf(f, "%d", &(*first)->arp->echo[1].num);
@@ -148,7 +145,6 @@ void nacitaj(Protocol **first, FILE *f) {
 			fscanf(f, "%d", &(*first)->ip->d_ip);
 			fscanf(f, "%d", &(*first)->ip->len);
 			fscanf(f, "%d", &(*first)->ip->prot_pos);
-			printf("Position of protocol in ip %d\n", (*first)->ip->prot_pos);
 
 		}
 
@@ -162,25 +158,16 @@ void nacitaj(Protocol **first, FILE *f) {
 			fscanf(f, "%d", &(*first)->ip->tcp->len_p);
 			fscanf(f, "%d", &(*first)->ip->tcp->tcp_value);
 			//spravi cez for loop
-			fscanf(f, "%d", &(*first)->ip->tcp->ports[0].num);
-			fscanf(f, "%s", (*first)->ip->tcp->ports[0].name);
-			fscanf(f, "%d", &(*first)->ip->tcp->ports[1].num);
-			fscanf(f, "%s", (*first)->ip->tcp->ports[1].name);
-			fscanf(f, "%d", &(*first)->ip->tcp->ports[2].num);
-			fscanf(f, "%s", (*first)->ip->tcp->ports[2].name);
-			fscanf(f, "%d", &(*first)->ip->tcp->ports[3].num);
-			fscanf(f, "%s", (*first)->ip->tcp->ports[3].name);
-			fscanf(f, "%d", &(*first)->ip->tcp->ports[4].num);
-			fscanf(f, "%s", (*first)->ip->tcp->ports[4].name);
-			fscanf(f, "%d", &(*first)->ip->tcp->ports[5].num);
-			fscanf(f, "%s", (*first)->ip->tcp->ports[5].name);
+			for (i = 0; i < 6; i++) {
+				fscanf(f, "%d", &(*first)->ip->tcp->ports[i].num);
+				fscanf(f, "%s", (*first)->ip->tcp->ports[i].name);
+			}
 		}
 
 		//naèítanie UDP
 		while ((c = getc(f)) != '\n') {
 			ungetc(c, f);
 			fscanf(f, "%s", (*first)->ip->udp->name);
-			printf("UDP name: %s\n", (*first)->ip->udp->name);
 			fscanf(f, "%d", &(*first)->ip->udp->s_port);
 			fscanf(f, "%d", &(*first)->ip->udp->d_port);
 			fscanf(f, "%d", &(*first)->ip->udp->len);
@@ -196,11 +183,9 @@ void nacitaj(Protocol **first, FILE *f) {
 			fscanf(f, "%d", &(*first)->ip->icmp->type);
 			fscanf(f, "%d", &(*first)->ip->icmp->len);
 			fscanf(f, "%d", &(*first)->ip->icmp->icmp_value);
-			printf("ICMP value: %d\n", (*first)->ip->icmp->icmp_value);
 			for (i = 0; i <= 5; i++) {
 				fscanf(f, "%d", &(*first)->ip->icmp->code[i].num);
 				fscanf(f, "%s", (*first)->ip->icmp->code[i].name);
-				printf("NUM: %d\n", (*first)->ip->icmp->code[i].num);
 			}
 		}
 
@@ -218,8 +203,6 @@ void nacitaj(Protocol **first, FILE *f) {
 			while ((c = getc(f)) != EOF) {
 				ungetc(c, f);
 				fscanf(f, "%s ", (akt)->name);
-				printf("IEEE -%s\n", (akt)->name);
-
 				fscanf(f, "%d", &(akt)->dest);
 				fscanf(f, "%d", &(akt)->src);
 				fscanf(f, "%d", &(akt)->len);
@@ -230,8 +213,6 @@ void nacitaj(Protocol **first, FILE *f) {
 		}
 
 	}
-
-
 }
 
 //Pomocný výpis
@@ -1429,16 +1410,18 @@ void Vypis_ICMP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pr
 	}
 }
 
-
+//Výpis pre ARP komunikáciu
 void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int frames, Protocol *first) {
 
 	int Arp_count, Arp_position;
 	int *arr = NULL;
+	int tmp, pom, i, delimiter, count, comm;	//pomocné premenné
 	char errbuff[10];
 	Protocol *akt = first;
 
 	Arp_count = 0;
 	Arp_position = akt->dest + akt->src;
+	delimiter = akt->arp->dst_ip + akt->arp->ip_len;
 
 	while (pcap_next_ex(f, &header, &pktdata) > 0) {
 
@@ -1461,6 +1444,178 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 		f = pcap_open_offline("eth-8.pcap", errbuff);
 
 		//naplníme pole 
+		tmp = 0;
+		pom = 0;
+		while (pcap_next_ex(f, &header, &pktdata) > 0) {
+			tmp++;
+			if (pktdata[Arp_position] * 100 + pktdata[Arp_position + 1] == akt->arr[2]) {
+				//zapamatanie è. ráamca
+				arr[pom] = tmp;
+				pom++;
+			}
+		}
+
+		//Rewind pcap_t Linked listu
+		pcap_close(f);
+		f = pcap_open_offline("eth-8.pcap", errbuff);
+		tmp = 0;
+		pom = 0;
+		printf("Arp count je %d\n", Arp_count);
+		//Poèet rámcov je vyšší než 20 (req +rep =2)
+		if (Arp_count / 2 > 20) {
+			while (pcap_next_ex(f, &header, &pktdata) > 0) {
+				tmp++;
+				if (tmp == arr[pom]) {
+					//Prvých 10 komunikácií
+					for (i = 0; i < 20; i += 2) {
+
+						printf("Komunikacia c: %d\n", i);
+						printf("%s - %s, ", akt->arp->name, pktdata[akt->arp->operation]);
+						printf("IP adresa: ");
+						for (i = akt->arp->dst_ip; i < delimiter; i++) {
+							if (i == delimiter - 1) {
+								printf("%d ,", pktdata[i]);
+								break;
+							}
+							printf("%d. ", pktdata[i]);
+						}
+						printf("MAC adresa: ???\n");
+						printf("Zdrojova IP adresa: ");
+						for (i = akt->arp->src_ip; i < akt->arp->dst_mac; i++) {
+							if (i == akt->arp->dst_mac - 1) {
+								printf("%d ,", pktdata[i]);
+								break;
+							}
+							printf("%d. ", pktdata[i]);
+						}
+						printf("Cielova IP: ");
+						for (i = akt->arp->dst_ip; i < delimiter; i++) {
+							if (i == delimiter - 1) {
+								printf("%d\n", pktdata[i]);
+								break;
+							}
+							printf("%d. ", pktdata[i]);
+						}
+						printf("Ramec: %d\n", arr[pom]);
+						pom++;
+						printf("Dlzka ramca poskytnuteho pcap API: %d\n", header->caplen);
+						printf("Dlza ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
+						printf("%s\n", akt->name);
+						//Výpis MAC adries
+						printf("Zdrojova MAC adresa: ");
+						for (i = akt->dest; i < akt->dest + akt->src; i++) {
+							if (i == 11) {
+								printf("%.2x\n", pktdata[i]);
+								break;
+							}
+							printf("%.2x ", pktdata[i]);
+						}
+
+						printf("Cielova MAC adresa: ");
+						for (i = akt->arp->dst_mac; i < akt->arp->dst_ip; i++) {
+							if (i == akt->arp->dst_ip - 1) {
+								printf("%.2x\n", pktdata[i]);
+								break;
+							}
+							printf("%.2x ", pktdata[i]);
+						}
+						//Vypis celého packetu
+						for (i = 1; i <= header->caplen; i++) {
+
+							printf("%.2x ", pktdata[i - 1]);
+
+							if (i % LINE_LEN == 8) {
+								printf("  ");
+							}
+							else if (i % LINE_LEN == 0) {
+								printf("\n");
+							}
+						}
+						printf("\n\n");
+					}
+				}
+			}
+		}
+		else
+		{
+			tmp = 0;						//Rámec
+			pom = 0;						//Index pola arr[pom]
+			count = 0;						//Komunikácia
+			while (pcap_next_ex(f, &header, &pktdata) > 0) {
+				tmp++;
+				if (tmp == arr[pom]) {
+					if (count % 2 == 0) {
+						printf("Komunikacia c.: %d\n", count);
+					}
+						printf("%s - %s, ", akt->arp->name, pktdata[akt->arp->operation] == 1 ? "Request" : "Reply");
+						printf("IP adresa: ");
+						for (i = akt->arp->dst_ip; i < delimiter; i++) {
+							if (i == delimiter - 1) {
+								printf("%d ,", pktdata[i]);
+								break;
+							}
+							printf("%d. ", pktdata[i]);
+						}
+						printf("MAC adresa: ???\n");
+						printf("Zdrojova IP adresa: ");
+						for (i = akt->arp->src_ip; i < akt->arp->dst_mac; i++) {
+							if (i == akt->arp->dst_mac - 1) {
+								printf("%d ,", pktdata[i]);
+								break;
+							}
+							printf("%d. ", pktdata[i]);
+						}
+						printf("Cielova IP: ");
+						for (i = akt->arp->dst_ip; i < delimiter; i++) {
+							if (i == delimiter - 1) {
+								printf("%d\n", pktdata[i]);
+								break;
+							}
+							printf("%d. ", pktdata[i]);
+						}
+						printf("Ramec: %d\n", arr[pom]);
+						pom++;
+						printf("Dlzka ramca poskytnuteho pcap API: %d\n", header->caplen);
+						printf("Dlza ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
+						printf("%s\n", akt->name);
+						//Výpis MAC adries
+						printf("Zdrojova MAC adresa: ");
+						for (i = akt->dest; i < akt->dest + akt->src; i++) {
+							if (i == 11) {
+								printf("%.2x\n", pktdata[i]);
+								break;
+							}
+							printf("%.2x ", pktdata[i]);
+						}
+
+						printf("Cielova MAC adresa: ");
+						for (i = akt->arp->dst_mac; i < akt->arp->dst_ip; i++) {
+							if (i == akt->arp->dst_ip - 1) {
+								printf("%.2x\n", pktdata[i]);
+								break;
+							}
+							printf("%.2x ", pktdata[i]);
+						}
+						//Vypis celého packetu
+						for (i = 1; i <= header->caplen; i++) {
+
+							printf("%.2x ", pktdata[i - 1]);
+
+							if (i % LINE_LEN == 8) {
+								printf("  ");
+							}
+							else if (i % LINE_LEN == 0) {
+								printf("\n");
+							}
+						}
+						printf("\n\n");
+						count++;				//slúži na komunikáciu
+					}
+				}
+			}
+
+		free(arr);						//Uvo¾nenie alokovaného po¾a
+		return;
 	}
 	else
 	{
@@ -1505,14 +1660,14 @@ int main(void) {
 		while ((c = getchar()) != 'k') {
 
 			switch (c) {
-				//Bod c. 1
+			//Bod c. 1
 			case '1':Point_1(f, header, pktdata, &count, first),
 				pcap_close(f),
 				(f = (pcap_open_offline("eth-8.pcap", errbuff))),
 				Vypis_ip(f, first, header, pktdata, count);
 				break;
 
-				//Bod 3 - HTTP
+			//Bod c. 3 
 			case 'a':Vypis_HTTP(f, header, pktdata, count, first); break;			//Výpis pre HTTP
 			case 'b':Vypis_HTTPS(f, header, pktdata, count, first); break;			//Výpis pre HTTPS
 			case 'c':Vypis_Telnet(f, header, pktdata, first); break;				//Výpis pre TELNET
@@ -1526,7 +1681,7 @@ int main(void) {
 			}
 
 			//Rewind pcap_t linked list
-			pcap_close(f);
+			//pcap_close(f);
 			f = (pcap_open_offline("eth-8.pcap", errbuff));
 
 		}
