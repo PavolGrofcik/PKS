@@ -32,7 +32,7 @@ typedef struct udp {
 }Udp;
 
 typedef struct icmp {
-	char name[4];		//ICMP
+	char name[5];		//ICMP
 	int type;			//Pozícia protokolu
 	int len;			//Dlzka
 	int icmp_value;		//Pozícia ICMP
@@ -429,7 +429,7 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 
 	//Rewindovanie pcap_t (f)
 	pcap_close(f);
-	f = (pcap_open_offline("eth-8.pcap", errbuff));
+	f = (pcap_open_offline("trace_ip_nad_20_B.pcap", errbuff));
 	count = 0;
 
 	//Hranica IP
@@ -1106,6 +1106,7 @@ void Vypis_FTP_Data(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata
 						}
 					}
 					putchar('\n');
+					putchar('\n');
 				}
 			}
 		}
@@ -1117,6 +1118,7 @@ void Vypis_TFTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pr
 	int i, position, prot_pos, tmp = 0, pom = 0;
 	int delimiter, delimiter2;
 	Protocol *akt = first;
+	int def_port = 0;			//port pod¾a ktorého budeme sledova celú ftp komunikáciu
 
 	//nastavenie pozície na 12 B (zaèiatok Ipv4)
 	position = akt->dest + akt->src;//12. B
@@ -1133,11 +1135,17 @@ void Vypis_TFTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pr
 			if (pktdata[prot_pos] == akt->ip->udp->udp_value) {
 
 				//Hodnota cieloveho portu musí by 69(tftp) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->udp->d_port+1] == akt->ip->udp->ports[0].num) {
+				if (pktdata[akt->ip->udp->d_port+1] == akt->ip->udp->ports[0].num ||
+					((pktdata[akt->ip->udp->s_port] * 256 + pktdata[akt->ip->udp->s_port + 1]) == def_port) ||
+					((pktdata[akt->ip->udp->d_port] * 256 + pktdata[akt->ip->udp->d_port + 1]) == def_port)) {
+					
 					printf("Ramec: %d\n", tmp);
 					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
 					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
 					printf("%s\n", akt->name);
+
+					//def port podla ktorého src portu budeme sledova celu komunikáciu(tftp server ma rozne portu ale rovnanke dst porty)
+					def_port = pktdata[akt->ip->udp->s_port] * 256 + pktdata[akt->ip->udp->s_port + 1];
 
 					printf("Zdrojova MAC adresa: ");
 					for (i = akt->dest; i < akt->dest + akt->src; i++) {
@@ -1210,6 +1218,7 @@ void Vypis_TFTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pr
 							printf("\n");
 						}
 					}
+					putchar('\n');
 					putchar('\n');
 				}
 			}
@@ -1295,14 +1304,14 @@ void Vypis_ICMP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pr
 							//ICMP name
 							printf("%s\n", akt->ip->icmp->name);
 
-							//Code -operation Echo, Time exceeded Reply ....
+							//Code -operation Echo, Time exceeded Reply .... decimalna sústava(bajty packetu)
 							switch (pktdata[akt->ip->icmp->type]) {
-							case '0': printf("%s\n", akt->ip->icmp->code[0].name); break;
-							case '3': printf("%s\n", akt->ip->icmp->code[1].name); break;
-							case '5': printf("%s\n", akt->ip->icmp->code[2].name); break;
-							case '8': printf("%s\n", akt->ip->icmp->code[3].name); break;
-							case '11': printf("%s\n", akt->ip->icmp->code[4].name); break;
-							case '30': printf("%s\n", akt->ip->icmp->code[5].name); break;
+							case 0: printf("%s\n", akt->ip->icmp->code[0].name); break;
+							case 3: printf("%s\n", akt->ip->icmp->code[1].name); break;
+							case 5: printf("%s\n", akt->ip->icmp->code[2].name); break;
+							case 8: printf("%s\n", akt->ip->icmp->code[3].name); break;
+							case 11: printf("%s\n", akt->ip->icmp->code[4].name); break;
+							case 30: printf("%s\n", akt->ip->icmp->code[5].name); break;
 							}
 							//Výpis packetu
 							for (i = 1; i <= header->caplen; i++) {
@@ -1316,6 +1325,7 @@ void Vypis_ICMP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pr
 									printf("\n");
 								}
 							}
+							putchar('\n');
 							putchar('\n');
 							//Zbytoène už necyklujeme keï sme už vypísali
 							break;
@@ -1343,7 +1353,7 @@ int main(void) {
 
 
 	//Otvorenie súborov na analýzu
-	if ((f = (pcap_open_offline("eth-8.pcap", errbuff))) == NULL ||
+	if ((f = (pcap_open_offline("trace_ip_nad_20_B.pcap", errbuff))) == NULL ||
 		(r = fopen("Linkframe.txt", "r")) == NULL) {
 
 		//Ak nastane chyba otvorenia súborov, program sa ukonèí
@@ -1365,7 +1375,7 @@ int main(void) {
 				//Bod c. 1
 			case '1':Point_1(f, header, pktdata, &count, first),
 				pcap_close(f),
-				(f = (pcap_open_offline("eth-8.pcap", errbuff))),
+				(f = (pcap_open_offline("trace_ip_nad_20_B.pcap", errbuff))),
 				Vypis_ip(f, first, header, pktdata, count);
 				break;
 
@@ -1383,7 +1393,7 @@ int main(void) {
 
 			//rewindovanie
 			pcap_close(f);
-			f = (pcap_open_offline("eth-8.pcap", errbuff));
+			f = (pcap_open_offline("trace_ip_nad_20_B.pcap", errbuff));
 	
 		}
 
