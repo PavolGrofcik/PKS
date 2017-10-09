@@ -331,7 +331,7 @@ void Point_1(pcap_t *f, struct pcap_pkthdr *hdr, const u_char *pkt_data, int *co
 }
 
 
-void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char *pkt_data, int n) {
+void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char *pkt_data, int n, char path[]) {
 
 	Protocol *akt = first;
 	int i, j = 0, max = 0, delimiter;
@@ -417,7 +417,7 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 
 	//Rewindovanie pcap_t (f)
 	pcap_close(f);
-	f = (pcap_open_offline("trace-17.pcap", errbuff));
+	f = (pcap_open_offline(path, errbuff));
 	count = 0;
 
 	//Hranica IP
@@ -1486,7 +1486,7 @@ void Print_info(struct pcap_pkthdr *header, const u_char *pktdata, Protocol *fir
 }
 
 //Výpis pre ARP komunikáciu
-void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int frames, Protocol *first) {
+void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int frames, Protocol *first, char path[]) {
 
 	int Arp_count, Arp_position;
 	int *arr = NULL;
@@ -1516,7 +1516,7 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 
 		//Rewind pcap_t Linked listu!!!!!!!!!!!!!!!!!!!
 		pcap_close(f);
-		f = pcap_open_offline("trace-17.pcap", errbuff);
+		f = pcap_open_offline(path, errbuff);
 
 		//naplníme pole 
 		tmp = 0;
@@ -1532,7 +1532,7 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 
 		//Rewind pcap_t Linked listu!!!!!!!!!!!!!!!!!!!!!
 		pcap_close(f);
-		f = pcap_open_offline("trace-17.pcap", errbuff);
+		f = pcap_open_offline(path, errbuff);
 
 
 		tmp = 0;
@@ -1611,7 +1611,7 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 			}
 		}
 
-		free(arr);														//Uvo¾nenie alokovaného po¾a
+		free(arr);															//Uvo¾nenie alokovaného po¾a
 		return;
 	}
 	else
@@ -1627,9 +1627,10 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 int main(void) {
 
 	char errbuff[PCAP_ERRBUF_SIZE];
-	int c, count = 0;										//Udáva poradové èíslo rámca ,poèet všetkých rámcov nachádzajúcich sa v súbore
+	char path[] = "C:\\Users\\Pavol Grofèík\\Documents\\Visual Studio 2017\\Projects\\Winpcap\\Winpcap\\trace-17.pcap";
+	int c, count = 0;													//Udáva poradové èíslo rámca ,poèet všetkých rámcov nachádzajúcich sa v súbore
 
-	pcap_t *f = NULL;										//Smerník na spájaný zoznam packetov zo súboru
+	pcap_t *f = NULL;													//Smerník na spájaný zoznam packetov zo súboru
 	const u_char *pktdata = NULL;
 	struct pcap_pkthdr *header = NULL;
 
@@ -1638,7 +1639,7 @@ int main(void) {
 
 
 	//Otvorenie súborov na analýzu
-	if ((f = (pcap_open_offline("trace-17.pcap", errbuff))) == NULL ||
+	if ((f = (pcap_open_offline(path, errbuff))) == NULL ||
 		(r = fopen("Linkframe.txt", "r")) == NULL) {
 
 		//Ak nastane chyba otvorenia súborov, program sa ukonèí
@@ -1660,8 +1661,8 @@ int main(void) {
 				//Bod c. 1
 			case '1':Point_1(f, header, pktdata, &count, first),
 				pcap_close(f),
-				(f = (pcap_open_offline("trace-17.pcap", errbuff))),
-				Vypis_ip(f, first, header, pktdata, count);
+				(f = (pcap_open_offline(path, errbuff))),
+				Vypis_ip(f, first, header, pktdata, count,path);
 				break;
 
 				//Bod c. 3 
@@ -1673,13 +1674,13 @@ int main(void) {
 			case 'f':Vypis_FTP_Data(f, header, pktdata, first); break;				//Výpis pre FTP-Data
 			case 'g':Vypis_TFTP(f, header, pktdata, first); break;					//Výpis pre TFTP
 			case 'h':Vypis_ICMP(f, header, pktdata, first); break;					//Výpis pre ICMP
-			case 'i':Vypis_Arp(f, header, pktdata, count, first); break;			//Výpis pre ARP 
+			case 'i':Vypis_Arp(f, header, pktdata, count, first,path); break;			//Výpis pre ARP 
 
 			}
 
 			//Rewind pcap_t linked list
 			//pcap_close(f);
-			f = (pcap_open_offline("trace-17.pcap", errbuff));
+			f = (pcap_open_offline(path, errbuff));
 
 		}
 
