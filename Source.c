@@ -91,8 +91,7 @@ typedef struct prot {
 //Naèítanie protokolov a špecifikácií zo súboru
 void nacitaj(Protocol **first, FILE *f) {
 
-	Protocol *akt = NULL,
-		*pom = NULL;
+	Protocol *akt = NULL;
 	int c, i;
 
 	if ((*first) == NULL) {
@@ -480,7 +479,7 @@ void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, in
 
 		tmp++;																				//Èíslo rámca
 		//Zistenie èi sa jedná o IPv4 (0800)
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1])) {
+		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p]/10 == 6) {
 
 			//Protokol HTTP sa nachádza na na relaènej vrtsve podprotokolu - TCP(06)
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
@@ -601,7 +600,7 @@ void Vypis_HTTPS(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, i
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
 		tmp++;
 		//Zistenie èi sa jedná o IPv4 (0800)
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1])) {
+		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p]/10 == 6) {
 
 			//Protokol HTTP sa nachádza na na relaènej vrtsve protokolu - TCP(06)
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
@@ -719,8 +718,8 @@ void Vypis_Telnet(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, 
 	//Prechadzanie paketmi a urèenie HTTPS
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
 		tmp++;
-		//Zistenie èi sa jedná o IPv4 (0800)
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1])) {
+		//Zistenie èi sa jedná o IPv4 (0800) && IPv4
+		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
 
 			//Protokol HTTP sa nachádza na na relaènej vrtsve protokolu - TCP(06)
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
@@ -838,8 +837,8 @@ void Vypis_SSH(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pro
 	//Prechadzanie paketmi a urèenie HTTPS
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
 		tmp++;
-		//Zistenie èi sa jedná o IPv4 (0800)
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1])) {
+		//Zistenie èi sa jedná o IPv4 (0800) && IPv4
+		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
 
 			//Protokol HTTP sa nachádza na na relaènej vrtsve protokolu - TCP(06)
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
@@ -958,7 +957,7 @@ void Vypis_FTP_Control(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktd
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
 		tmp++;
 		//Zistenie èi sa jedná o IPv4 (0800)
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1])) {
+		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
 
 			//Protokol HTTP sa nachádza na na relaènej vrtsve protokolu - TCP(06)
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
@@ -1075,8 +1074,8 @@ void Vypis_FTP_Data(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata
 	//Prechadzanie paketmi a urèenie HTTPS
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
 		tmp++;
-		//Zistenie èi sa jedná o IPv4 (0800)
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1])) {
+		//Zistenie èi sa jedná o IPv4 (0800) && IPv4
+		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
 
 			//Protokol HTTP sa nachádza na na relaènej vrtsve protokolu - TCP(06)
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
@@ -1192,8 +1191,8 @@ void Vypis_TFTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pr
 	//Prechadzanie paketmi a urèenie UDP(69-TFTP)
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
 		tmp++;
-		//Zistenie èi sa jedná o IPv4 (0800)
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1])) {
+		//Zistenie èi sa jedná o IPv4 (0800) && IPv4
+		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
 
 			//Protokol HTTP sa nachádza na na relaènej vrtsve protokolu - UDP(17) (x11)
 			if (pktdata[prot_pos] == akt->ip->udp->udp_value) {
@@ -1319,8 +1318,8 @@ void Vypis_ICMP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pr
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
 
 		tmp++;		//Èíslo rámca
-		//Zistenie èi sa jedná o IPv4 (0800)
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1])) {
+		//Zistenie èi sa jedná o IPv4 (0800) && IPv4
+		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
 
 			//Protokol ICMP sa nachádza na na transportnej vrtsve protokolu IP - ICMP  - 1 (x11)
 			if (pktdata[prot_pos] == akt->ip->icmp->icmp_value) {
