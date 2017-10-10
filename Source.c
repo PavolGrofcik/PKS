@@ -1408,7 +1408,7 @@ void Vypis_ICMP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pr
 	}
 }
 
-void Print_info(struct pcap_pkthdr *header, const u_char *pktdata, Protocol *first, int arr[], int pom) {
+void Print_info(struct pcap_pkthdr *header, const u_char *pktdata, Protocol *first, int arr[], int pom,int flag) {
 
 	int i, count, delimiter;
 	Protocol *akt = first;
@@ -1425,8 +1425,22 @@ void Print_info(struct pcap_pkthdr *header, const u_char *pktdata, Protocol *fir
 		}
 		printf("%d. ", pktdata[i]);
 	}
-
-	printf("MAC adresa: ???\n");
+	if (flag == 0) {
+		printf("MAC adresa: ???\n");
+	}
+	else
+	{
+		printf("MAC adresa: ");
+		//Výpis nájdenej MAC adresy
+		for (i = akt->dest; i < akt->dest + akt->src; i++) {
+			if (i == 11) {
+				printf("%.2x\n", pktdata[i]);
+				break;
+			}
+			printf("%.2x ", pktdata[i]);
+		}
+	}
+	
 	printf("Zdrojova IP adresa: ");											//Src IP	
 	for (i = akt->arp->src_ip; i < akt->arp->dst_mac; i++) {
 		if (i == akt->arp->dst_mac - 1) {
@@ -1490,6 +1504,7 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 	int *arr = NULL;
 	int tmp, pom, i, delimiter, count, comm;	//pomocné premenné
 	int j, pom2, count2, comm2;
+	int flag;									//Príznak potrebný k výpisu
 	char errbuff[10];
 	Protocol *akt = first;
 
@@ -1530,7 +1545,6 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 		pcap_close(f);
 		f = pcap_open_offline(path, errbuff);
 
-
 		tmp = 0;
 		pom = 0;
 		count = 0;
@@ -1546,16 +1560,18 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 				tmp++;
 				if (tmp == arr[pom] && i < 20) {
 					if (count % 2 == 0) {
+						flag = 0;
 						comm++;
 						printf("Komunikacia c: %d\n", comm);
-						Print_info(header, pktdata, first, arr, pom);
+						Print_info(header, pktdata, first, arr, pom,flag);
 						pom++;
 						count++;
 						i++;
 					}
 					else
 					{
-						Print_info(header, pktdata, first, arr, pom);
+						flag = 0;
+						Print_info(header, pktdata, first, arr, pom,flag);
 						pom++;
 						count++;
 						i++;
@@ -1567,14 +1583,14 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 					if (count2 % 2 == 0) {
 						comm2++;
 						printf("Komunikacia c: %d\n", comm);
-						Print_info(header, pktdata, first, arr, pom2);
+						Print_info(header, pktdata, first, arr, pom2,flag);
 						pom2++;
 						count2++;
 						j++;
 					}
 					else
 					{
-						Print_info(header, pktdata, first, arr, pom2);
+						Print_info(header, pktdata, first, arr, pom2,flag);
 						pom2++;
 						count2++;
 						j++;
@@ -1585,28 +1601,30 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 		else
 		{
 			i = 0;
-			tmp = 1;														//Rámec
-			pom = 0;														//Index pola arr[pom]
-			count = 0;														//Komunikácia
+			tmp = 1;															//Rámec
+			pom = 0;															//Index pola arr[pom]
+			count = 0;															//Komunikácia
 			while (pcap_next_ex(f, &header, &pktdata) > 0) {
 				if (tmp == arr[pom] && count < 20) {
 					if (count % 2 == 0) {
-						i++;												//Èíslo komunikácie
+						i++;													//Èíslo komunikácie
+						flag = 0;
 						printf("Komunikacia c: %d\n", i);
-						Print_info(header, pktdata, first, arr, pom);
+						Print_info(header, pktdata, first, arr, pom,flag);
 						pom++;
 						count++;
 					}
 					else {
 						if (pktdata[akt->arp->operation] == akt->arp->echo[0].num) {
-
-							Print_info(header, pktdata, first, arr, pom);		//Zobrazí informácie o danej komunikácii
+							flag = 0;
+							Print_info(header, pktdata, first, arr, pom,flag);		//Zobrazí informácie o danej komunikácii
 							pom++;												//Slúži na posunutie pozície v poli o +1 dopredu
 						}
 						else
 						{
-							//ARP reply only
-							Print_info(header, pktdata, first, arr, pom);
+							//ARP reply only => flag == 1 (Výpis reply namiesto ????)
+							flag = 1;
+							Print_info(header, pktdata, first, arr, pom,flag);
 							pom++;
 							count++;											////Slúži na urèenie èísla komunikácie
 						
@@ -1617,7 +1635,7 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 			}
 		}
 
-		free(arr);															//Uvo¾nenie alokovaného po¾a
+		free(arr);																//Uvo¾nenie alokovaného po¾a
 		return;
 	}
 	else
@@ -1656,9 +1674,6 @@ int main(void) {
 		//Naèítanie protokolov a informácií do spájaného zoznamu
 		nacitaj(&first, r);
 
-		//kontrolný výpis
-		//vypis_prot(first);
-
 		while ((c = getchar()) != 'k') {
 
 			switch (c) {
@@ -1682,12 +1697,9 @@ int main(void) {
 
 			}
 
-			//Rewind pcap_t linked list
-			//pcap_close(f);
-			f = (pcap_open_offline(path, errbuff));
+			f = (pcap_open_offline(path, errbuff));									//Rewind pcap_t *f
 
 		}
-
 
 		pcap_close(f);
 
