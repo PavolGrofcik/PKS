@@ -343,7 +343,7 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 	//Hranica (src) IP adrey 
 	delimiter = akt->ip->s_ip + 4;
 
-	//Alokácia 2d po¾a na urèenie max ve¾kosti bajtov
+	//Alokácia 2D po¾a na urèenie max ve¾kosti bajtov
 	if ((arr = (int**)malloc(n * sizeof(int*))) == NULL) {
 		printf("Nedostatok pamate\n");
 		return;
@@ -437,7 +437,6 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 				if (i == (max - 1)) {
 					printf("%d", pkt_data[i]);
 					printf("\t %d Bajtov\n", delimiter);
-					j = 1;
 					break;
 				}
 				printf("%d. ", pkt_data[i]);
@@ -468,8 +467,8 @@ void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, in
 	Protocol *akt = first;
 
 	//nastavenie pozícií 
-	position = akt->dest + akt->src;//12. B
-	prot_pos = akt->ip->prot_pos;
+	position = akt->dest + akt->src;				//12. B
+	prot_pos = akt->ip->prot_pos;					//14. B
 	delimiter = akt->ip->d_ip;
 	delimiter2 = akt->ip->tcp->d_port;
 	http_val = akt->ip->tcp->ports[4].num;			//È. portu - 80 (Dec)
@@ -478,8 +477,8 @@ void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, in
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
 
 		tmp++;																				//Èíslo rámca
-		//Zistenie èi sa jedná o IPv4 (0800)
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p]/10 == 6) {
+		//Zistenie èi sa jedná o IPv4 (0800) && IPv4
+		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
 
 			//Protokol HTTP sa nachádza na na relaènej vrtsve podprotokolu - TCP(06)
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
@@ -600,14 +599,14 @@ void Vypis_HTTPS(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, i
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
 		tmp++;
 		//Zistenie èi sa jedná o IPv4 (0800)
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p]/10 == 6) {
+		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
 
 			//Protokol HTTP sa nachádza na na relaènej vrtsve protokolu - TCP(06)
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
 
 				//Hodnota cieloveho portu musí by 443(https) Dst port(pozicia druha tj(36+1)==37
-				if ((pktdata[akt->ip->tcp->d_port + 1] + pktdata[akt->ip->tcp->d_port]*256) == https_val ||
-					(pktdata[akt->ip->tcp->s_port + 1] + pktdata[akt->ip->tcp->s_port]*256) == https_val) {
+				if ((pktdata[akt->ip->tcp->d_port + 1] + pktdata[akt->ip->tcp->d_port] * 256) == https_val ||
+					(pktdata[akt->ip->tcp->s_port + 1] + pktdata[akt->ip->tcp->s_port] * 256) == https_val) {
 					printf("Ramec: %d\n", tmp);
 					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
 					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
@@ -715,7 +714,7 @@ void Vypis_Telnet(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, 
 	delimiter2 = akt->ip->tcp->d_port;
 	telnet_val = akt->ip->tcp->ports[3].num;			//23 - TELNET
 
-	//Prechadzanie paketmi a urèenie HTTPS
+	//Prechadzanie paketmi a urèenie Telnet
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
 		tmp++;
 		//Zistenie èi sa jedná o IPv4 (0800) && IPv4
@@ -829,12 +828,12 @@ void Vypis_SSH(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pro
 
 	//nastavenie pozície na 12 B (zaèiatok Ipv4)
 	position = akt->dest + akt->src;								//12. B
-	prot_pos = akt->ip->prot_pos;
+	prot_pos = akt->ip->prot_pos;									//14. B
 	delimiter = akt->ip->d_ip;
 	delimiter2 = akt->ip->tcp->d_port;
 	SSH_val = akt->ip->tcp->ports[2].num;							//22 - SSH
 
-	//Prechadzanie paketmi a urèenie HTTPS
+	//Prechadzanie paketmi a urèenie SSHs
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
 		tmp++;
 		//Zistenie èi sa jedná o IPv4 (0800) && IPv4
@@ -953,7 +952,7 @@ void Vypis_FTP_Control(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktd
 	delimiter2 = akt->ip->tcp->d_port;
 	ftp_val = akt->ip->tcp->ports[1].num;
 
-	//Prechadzanie paketmi a urèenie HTTPS
+	//Prechadzanie paketmi a urèenie FTP
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
 		tmp++;
 		//Zistenie èi sa jedná o IPv4 (0800)
@@ -1071,7 +1070,7 @@ void Vypis_FTP_Data(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata
 	delimiter2 = akt->ip->tcp->d_port;
 	ftpd_val = akt->ip->tcp->ports[0].num;
 
-	//Prechadzanie paketmi a urèenie HTTPS
+	//Prechadzanie paketmi a urèenie FTP - data
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
 		tmp++;
 		//Zistenie èi sa jedná o IPv4 (0800) && IPv4
@@ -1513,7 +1512,6 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 			return;
 		}
 
-		//Rewind pcap_t Linked listu!!!!!!!!!!!!!!!!!!!
 		pcap_close(f);
 		f = pcap_open_offline(path, errbuff);
 
@@ -1522,14 +1520,13 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 		pom = 0;
 		while (pcap_next_ex(f, &header, &pktdata) > 0) {
 			tmp++;
-			if (pktdata[Arp_position] * 100 + pktdata[Arp_position + 1] == akt->arr[2]) {
+			if (pktdata[Arp_position] * 100 + pktdata[Arp_position + 1] == akt->arr[2]) {			//Ošetrenie že sa jedná o rámec s ARP
 				//zapamatanie è. rámca
 				arr[pom] = tmp;
 				pom++;
 			}
 		}
 
-		//Rewind pcap_t Linked listu!!!!!!!!!!!!!!!!!!!!!
 		pcap_close(f);
 		f = pcap_open_offline(path, errbuff);
 
@@ -1547,7 +1544,7 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 		if (Arp_count / 2 > 20) {
 			while (pcap_next_ex(f, &header, &pktdata) > 0) {
 				tmp++;
-				if (tmp == arr[pom] && i<20) {
+				if (tmp == arr[pom] && i < 20) {
 					if (count % 2 == 0) {
 						comm++;
 						printf("Komunikacia c: %d\n", comm);
@@ -1564,8 +1561,8 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 						i++;
 					}
 				}
-				else if (tmp == arr[delimiter] && j<20) {
-					
+				else if (tmp == arr[delimiter] && j < 20) {
+
 
 					if (count2 % 2 == 0) {
 						comm2++;
@@ -1588,22 +1585,32 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 		else
 		{
 			i = 0;
-			tmp = 1;													//Rámec
-			pom = 0;													//Index pola arr[pom]
-			count = 0;													//Komunikácia
+			tmp = 1;														//Rámec
+			pom = 0;														//Index pola arr[pom]
+			count = 0;														//Komunikácia
 			while (pcap_next_ex(f, &header, &pktdata) > 0) {
-				if (tmp == arr[pom] && count <20) {
+				if (tmp == arr[pom] && count < 20) {
 					if (count % 2 == 0) {
-						i++;											//Èíslo komunikácie
+						i++;												//Èíslo komunikácie
 						printf("Komunikacia c: %d\n", i);
 						Print_info(header, pktdata, first, arr, pom);
 						pom++;
 						count++;
 					}
 					else {
-						Print_info(header, pktdata, first, arr, pom);		//Zobrazí informácie o danej komunikácii
-						pom++;												//Slúži na posunutie pozície v poli o +1 dopredu
-						count++;											//Slúži na urèenie èísla komunikácie
+						if (pktdata[akt->arp->operation] == akt->arp->echo[0].num) {
+
+							Print_info(header, pktdata, first, arr, pom);		//Zobrazí informácie o danej komunikácii
+							pom++;												//Slúži na posunutie pozície v poli o +1 dopredu
+						}
+						else
+						{
+							//ARP reply only
+							Print_info(header, pktdata, first, arr, pom);
+							pom++;
+							count++;											////Slúži na urèenie èísla komunikácie
+						
+						}
 					}
 				}
 				tmp++;
@@ -1621,12 +1628,10 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 }
 
 
-// Ak otvaraš iný súbor musíš zmenit v main,switch-rewind point 1 a vypis-IP,arp komunikáciu
-
 int main(void) {
 
 	char errbuff[PCAP_ERRBUF_SIZE];
-	char path[] = "C:\\Users\\Pavol Grofèík\\Documents\\Visual Studio 2017\\Projects\\Winpcap\\Winpcap\\trace-17.pcap";
+	char path[] = "C:\\Users\\Pavol Grofèík\\Documents\\Visual Studio 2017\\Projects\\Winpcap\\Winpcap\\trace-2.pcap";
 	int c, count = 0;													//Udáva poradové èíslo rámca ,poèet všetkých rámcov nachádzajúcich sa v súbore
 
 	pcap_t *f = NULL;													//Smerník na spájaný zoznam packetov zo súboru
@@ -1661,7 +1666,7 @@ int main(void) {
 			case '1':Point_1(f, header, pktdata, &count, first),
 				pcap_close(f),
 				(f = (pcap_open_offline(path, errbuff))),
-				Vypis_ip(f, first, header, pktdata, count,path);
+				Vypis_ip(f, first, header, pktdata, count, path);
 				break;
 
 				//Bod c. 3 
@@ -1673,7 +1678,7 @@ int main(void) {
 			case 'f':Vypis_FTP_Data(f, header, pktdata, first); break;				//Výpis pre FTP-Data
 			case 'g':Vypis_TFTP(f, header, pktdata, first); break;					//Výpis pre TFTP
 			case 'h':Vypis_ICMP(f, header, pktdata, first); break;					//Výpis pre ICMP
-			case 'i':Vypis_Arp(f, header, pktdata, count, first,path); break;			//Výpis pre ARP 
+			case 'i':Vypis_Arp(f, header, pktdata, count, first, path); break;		//Výpis pre ARP 
 
 			}
 
@@ -1692,9 +1697,8 @@ int main(void) {
 
 		//Vrátenie alokovanej pamate OS
 		delete_list(first);
-		//free(pktdata, header);
+		free(pktdata, header);
 		first = NULL;
 		return 0;
 	}
-
 }
