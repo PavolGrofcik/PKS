@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <WinSock2.h>
 #include <pcap.h>
 
@@ -257,7 +258,6 @@ void Point_1(pcap_t *f, struct pcap_pkthdr *hdr, const u_char *pkt_data, int *co
 	if (akt == NULL) {
 		return;
 	}
-
 
 	while ((pcap_next_ex(f, &hdr, &pkt_data)) >= 0) {
 
@@ -1646,6 +1646,26 @@ void Vypis_Arp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int
 }
 
 
+//Zobrazí základné informácie o programe a k¾úèové slová
+void Intro() {
+
+	printf("Zadajte operaciu: \n");
+	printf("1: Bod c. 1\n");
+	printf("a: Vypis pre http komunikaciu\n");
+	printf("b: Vypis pre https komunikaciu\n");
+	printf("c: Vypis pre Telnet komunikaciu\n");
+	printf("d: Vypis pre SSH komunikaciu\n");
+	printf("e: Vypis pre FTP - control komunikaciu\n");
+	printf("f: Vypis pre FTP - data komunikaciu\n");
+	printf("g: Vypis pre TFTP komunikaciu\n");
+	printf("h: Vypis pre ICMP komunikaciu\n");
+	printf("i: Vypis pre ARP komunikaciu\n");
+	printf("j: Vypis pre DNS komunikáciu\n");
+	printf("k: Koniec programu\n");
+
+}
+
+
 int main(void) {
 
 	char errbuff[PCAP_ERRBUF_SIZE];
@@ -1671,8 +1691,21 @@ int main(void) {
 	}
 	else
 	{
+
+		time_t t = time(NULL);
+		struct tm *tm = localtime(&t);
+		char s[64];
+
+		printf("Vitajte!\n");
+		//printf("Dnes: ");
+		strftime(s, sizeof(s), "%c", tm);
+		printf("%s\n\n", s);
+		tm = NULL;
+		//Zobrazenie domovskej obrazovky
+		Intro();
 		//Naèítanie protokolov a informácií do spájaného zoznamu
 		nacitaj(&first, r);
+
 
 		while ((c = getchar()) != 'k') {
 
@@ -1684,7 +1717,7 @@ int main(void) {
 				Vypis_ip(f, first, header, pktdata, count, path);
 				break;
 
-				//Bod c. 3 
+			//Bod c. 3 
 			case 'a':Vypis_HTTP(f, header, pktdata, count, first); break;			//Výpis pre HTTP
 			case 'b':Vypis_HTTPS(f, header, pktdata, count, first); break;			//Výpis pre HTTPS
 			case 'c':Vypis_Telnet(f, header, pktdata, first); break;				//Výpis pre TELNET
@@ -1696,7 +1729,6 @@ int main(void) {
 			case 'i':Vypis_Arp(f, header, pktdata, count, first, path); break;		//Výpis pre ARP 
 
 			}
-
 			f = (pcap_open_offline(path, errbuff));									//Rewind pcap_t *f
 
 		}
