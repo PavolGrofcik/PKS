@@ -22,6 +22,15 @@ typedef struct  pairs {
 	char name[16];
 }Pairs;
 
+//ätrukt˙ra pre DNS
+typedef struct dns {
+	char name[4];		//DNS
+	Pairs q_res[2];		//Querry/response
+	Pairs op_code[3];	//OperaËn˝ kÛd
+	Pairs res_code[6];	//Response cod
+	int position[3];	//PozÌcie pre danÈ kod˝ 0 -q_res 1 - op_code 2 - res_code
+}Dns;
+
 //ätrukt˙ra pre UDP
 typedef struct udp {
 	char name[4];		//UDP
@@ -29,7 +38,8 @@ typedef struct udp {
 	int d_port;			//Dst port
 	int len;			//Veækostù portov
 	int udp_value;		//PozÌcia UDP
-	Pairs ports[1];		//Hodnota portov s n·zvom
+	Pairs ports[2];		//Hodnota portov s n·zvom
+	Dns dns[1];			//DNS v UDP
 }Udp;
 
 typedef struct icmp {
@@ -60,7 +70,8 @@ typedef struct tcp {
 	int d_port;			//Dst port
 	int len_p;			//Veækosù portov(Bytes)
 	int tcp_value;		//Pozicia TCP 
-	Pairs ports[6];		//Hodnota portu + n·zov
+	Pairs ports[7];		//Hodnota portu + n·zov
+	Dns dns[1];			//DNS v TCP
 }Tcp;
 
 //ätrukt˙ra pre IP
@@ -158,7 +169,7 @@ void nacitaj(Protocol **first, FILE *f) {
 			fscanf(f, "%d", &(*first)->ip->tcp->len_p);
 			fscanf(f, "%d", &(*first)->ip->tcp->tcp_value);
 			//spraviù cez for loop
-			for (i = 0; i < 6; i++) {
+			for (i = 0; i < 7; i++) {
 				fscanf(f, "%d", &(*first)->ip->tcp->ports[i].num);
 				fscanf(f, "%s", (*first)->ip->tcp->ports[i].name);
 			}
@@ -174,6 +185,8 @@ void nacitaj(Protocol **first, FILE *f) {
 			fscanf(f, "%d", &(*first)->ip->udp->udp_value);
 			fscanf(f, "%d", &(*first)->ip->udp->ports[0].num);
 			fscanf(f, "%s", (*first)->ip->udp->ports[0].name);
+			fscanf(f, "%d", &(*first)->ip->udp->ports[1].num);
+			fscanf(f, "%s", (*first)->ip->udp->ports[1].name);
 		}
 
 		//NaËÌtanie ICMP
@@ -186,6 +199,31 @@ void nacitaj(Protocol **first, FILE *f) {
 			for (i = 0; i <= 5; i++) {
 				fscanf(f, "%d", &(*first)->ip->icmp->code[i].num);
 				fscanf(f, "%s", (*first)->ip->icmp->code[i].name);
+			}
+		}
+
+		//NaËÌtanie DNS
+
+		while ((c = getc(f)) != '\n') {
+			ungetc(c, f);
+			fscanf(f, "%s", (*first)->ip->udp->dns->name);
+			for (i = 0; i < 3; i++) {
+				fscanf(f, "%d", &(*first)->ip->udp->dns->position[i]);
+			}
+			for (i = 0; i < 2; i++) {
+				fscanf(f, "%d", &(*first)->ip->udp->dns->q_res[i].num);
+				fscanf(f, "%s", (*first)->ip->udp->dns->q_res[i].name);
+
+			}
+			for (i = 0; i < 3; i++) {
+				fscanf(f, "%d", &(*first)->ip->udp->dns->op_code[i].num);
+				fscanf(f, "%s", (*first)->ip->udp->dns->op_code[i].name);
+
+			}
+			for (i = 0; i < 6; i++) {
+				fscanf(f, "%d", &(*first)->ip->udp->dns->res_code[i].num);
+				fscanf(f, "%s", (*first)->ip->udp->dns->res_code[i].name);
+
 			}
 		}
 
@@ -1660,9 +1698,159 @@ void Intro() {
 	printf("g: Vypis pre TFTP komunikaciu\n");
 	printf("h: Vypis pre ICMP komunikaciu\n");
 	printf("i: Vypis pre ARP komunikaciu\n");
-	printf("j: Vypis pre DNS komunik·ciu\n");
+	printf("j: Vypis pre DNS komunik·ciu UDP\n");
 	printf("k: Koniec programu\n");
 
+}
+
+void Dns_udp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Protocol *first) {
+		int i, position, prot_pos, tmp = 0, pom = 0;
+		int delimiter, delimiter2;
+		Protocol *akt = first;
+		int def_port = 0;							//port podæa ktorÈho budeme sledovaù cel˙ ftp komunik·ciu
+
+													//nastavenie pozÌcie na 12 B (zaËiatok Ipv4)
+		position = akt->dest + akt->src;//12. B
+		prot_pos = akt->ip->prot_pos;
+		delimiter = akt->ip->d_ip;
+
+		//Prechadzanie paketmi a urËenie UDP(69-TFTP)
+		while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
+			tmp++;
+			//Zistenie Ëi sa jedn· o IPv4 (0800) && IPv4
+			if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
+
+				//Protokol HTTP sa nach·dza na na relaËnej vrtsve protokolu - UDP(17) (x11)
+				if (pktdata[prot_pos] == akt->ip->udp->udp_value) {
+
+					//Hodnota cieloveho portu musÌ byù 53(domain) Dst port(pozicia druha tj(36+1)==37
+					if (pktdata[akt->ip->udp->d_port + 1] == akt->ip->udp->ports[1].num ||
+						((pktdata[akt->ip->udp->s_port] * 256 + pktdata[akt->ip->udp->s_port + 1]) == def_port) ||
+						((pktdata[akt->ip->udp->d_port] * 256 + pktdata[akt->ip->udp->d_port + 1]) == def_port)) {
+
+						printf("Ramec: %d\n", tmp);
+						printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
+						printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
+						printf("%s\n", akt->name);
+
+						//def port podla ktorÈho src portu budeme sledovaù celu komunik·ciu(tftp server ma rozne portu ale rovnanke dst porty)
+						def_port = pktdata[akt->ip->udp->s_port] * 256 + pktdata[akt->ip->udp->s_port + 1];
+
+						printf("Zdrojova MAC adresa: ");
+						for (i = akt->dest; i < akt->dest + akt->src; i++) {
+							if (i == 11) {
+								printf("%.2x\n", pktdata[i]);
+								break;
+							}
+							printf("%.2x ", pktdata[i]);
+						}
+
+						printf("Cielova MAC adresa: ");
+						for (i = 0; i < akt->dest; i++) {
+							if (i == 5) {
+								printf("%.2x\n", pktdata[i]);
+								break;
+							}
+							printf("%.2x ", pktdata[i]);
+						}
+
+						//IPv4
+						printf("%s\n", akt->ip->name);
+						printf("Zdrojova IP adresa: ");
+						//Src IP
+						for (i = akt->ip->s_ip; i < delimiter; i++) {
+							if (i == delimiter - 1) {
+								printf("%d\n", pktdata[i]);
+								break;
+							}
+							printf("%d. ", pktdata[i]);
+						}
+						//Dst IP
+						printf("Cielova IP adresa: ");
+						for (i = delimiter; i < delimiter + akt->ip->len; i++) {
+							if (i == (delimiter + akt->ip->len - 1)) {
+								printf("%d\n", pktdata[i]);
+								break;
+							}
+							printf("%d. ", pktdata[i]);
+						}
+
+						//UDP
+						printf("%s\n", akt->ip->udp->name);
+
+						//Porty
+						//Src
+						pom = 0;
+						printf("Zdrojovy port: ");
+						for (i = akt->ip->udp->s_port; i < akt->ip->udp->d_port; i++) {
+							if (i == akt->ip->tcp->s_port) {
+								pom = pktdata[i] * 256;
+							}
+							else
+							{
+								pom += pktdata[i];
+							}
+						}
+						printf("%d\n", pom);
+						//Dst
+						printf("Cielovy port: ");
+						for (i = akt->ip->udp->d_port; i < akt->ip->udp->d_port + 2; i++) {
+							if (i == akt->ip->tcp->d_port) {
+								pom = pktdata[i] * 256;
+							}
+							else
+							{
+								pom += pktdata[i];
+							}
+						}
+						printf("%d\n", pom);
+
+						//Response/querry
+						pom = 0;
+						for (i = akt->ip->udp->dns->position[2]; i < akt->ip->udp->dns->position[2] + 2; i++) {
+							if (i == akt->ip->udp->dns->position[2]) {
+								pom = pktdata[i] * 256;
+							}
+							else
+							{
+								pom += pktdata[i];
+							}
+						}
+						printf("%s\n", pom >> 15 == 1 ? "Response" : "Querry");
+						/*		//Dorobiù selekciu 4 posledn˝ch bitov!!!
+						pom = 0;
+						for (i = akt->ip->udp->dns->position[2]; i < akt->ip->udp->dns->position[2] + 2; i++) {
+							if (i == akt->ip->udp->dns->position[2]) {
+								pom = pktdata[i] * 256;
+							}
+							else
+							{
+								pom += pktdata[i];
+							}
+						}
+						
+						switch (pom) {
+							case 
+						}
+						*/
+						//Vypis Bytov(packetu)
+						for (i = 1; i <= header->caplen; i++) {
+
+							printf("%.2x ", pktdata[i - 1]);
+
+							if (i % LINE_LEN == 8) {
+								printf("  ");
+							}
+							else if (i % LINE_LEN == 0) {
+								printf("\n");
+							}
+						}
+						putchar('\n');
+						putchar('\n');
+					}
+				}
+			}
+		}
 }
 
 
@@ -1727,6 +1915,7 @@ int main(void) {
 			case 'g':Vypis_TFTP(f, header, pktdata, first); break;					//V˝pis pre TFTP
 			case 'h':Vypis_ICMP(f, header, pktdata, first); break;					//V˝pis pre ICMP
 			case 'i':Vypis_Arp(f, header, pktdata, count, first, path); break;		//V˝pis pre ARP 
+			case 'j':Dns_udp(f, header, pktdata, first); break;						//V˝pis DND pre UDP
 
 			}
 			f = (pcap_open_offline(path, errbuff));									//Rewind pcap_t *f
