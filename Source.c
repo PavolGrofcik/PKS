@@ -1899,7 +1899,7 @@ int main(void) {
 
 			switch (c) {
 				//Bod c. 1
-			case '1':Point_1(f, header, pktdata, &count, first),
+			case '1':Point_1(f, header, pktdata, &count, first),					//Oöetriù len pre ipv4 pozor na IIEE 802.3 len pre Ethernet II, porobiù bod a do f cez jednu funkciu
 				pcap_close(f),
 				(f = (pcap_open_offline(path, errbuff))),
 				Vypis_ip(f, first, header, pktdata, count, path);
