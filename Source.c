@@ -97,7 +97,6 @@ typedef struct prot {
 	struct prot *next;	//Ukazovatel na dalsiu strukturu
 	Arp arp[1];
 	IP ip[1];
-
 }Protocol;
 
 //NaËÌtanie protokolov a öpecifik·ciÌ zo s˙boru
@@ -126,7 +125,6 @@ void nacitaj(Protocol **first, FILE *f) {
 			fscanf(f, "%d", &(*first)->arr[0]);
 			fscanf(f, "%d", &(*first)->arr[1]);
 			fscanf(f, "%d", &(*first)->arr[2]);
-
 		}
 		//naËÌtanie ARP
 		while ((c = getc(f)) != '\n') {
@@ -144,7 +142,6 @@ void nacitaj(Protocol **first, FILE *f) {
 			fscanf(f, "%s", (*first)->arp->echo[0].name);
 			fscanf(f, "%d", &(*first)->arp->echo[1].num);
 			fscanf(f, "%s", (*first)->arp->echo[1].name);
-
 		}
 
 		//naËÌtanie IP
@@ -156,7 +153,6 @@ void nacitaj(Protocol **first, FILE *f) {
 			fscanf(f, "%d", &(*first)->ip->d_ip);
 			fscanf(f, "%d", &(*first)->ip->len);
 			fscanf(f, "%d", &(*first)->ip->prot_pos);
-
 		}
 
 		//naËÌtanie TCP
@@ -203,7 +199,6 @@ void nacitaj(Protocol **first, FILE *f) {
 		}
 
 		//NaËÌtanie DNS
-
 		while ((c = getc(f)) != '\n') {
 			ungetc(c, f);
 			fscanf(f, "%s", (*first)->ip->udp->dns->name);
@@ -227,7 +222,6 @@ void nacitaj(Protocol **first, FILE *f) {
 			}
 		}
 
-
 		akt = (*first);
 		//akt = akt->next;
 
@@ -249,23 +243,6 @@ void nacitaj(Protocol **first, FILE *f) {
 				fscanf(f, "%d", &(akt)->arr[2]);
 			}
 		}
-	}
-}
-
-//Pomocn˝ v˝pis
-void vypis_prot(Protocol *first) {
-	Protocol *akt = NULL;
-	akt = first;
-	while (akt != NULL) {
-
-		printf("Name: %s\n", (akt)->name);
-		printf("Dest: %d\n", (akt)->dest);
-		printf("Src: %d\n", (akt)->src);
-		printf("Len: %d\n", (akt)->len);
-		printf("Min: %d\n", (akt)->arr[0]);
-		printf("IP: %d\n", akt->arr[1]);
-		printf("Arp: %d\n", akt->arr[2]);
-		akt = akt->next;
 	}
 }
 
@@ -497,20 +474,38 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 
 
 //V˝pis pre HTTP komunik·cie
-void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int count, Protocol *first) {
+void Print_Protocol(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int count, Protocol *first, char s[]) {
 
 	int i, position, prot_pos, tmp = 0, pom = 0;
 	int delimiter, delimiter2;
-	int http_val;
+	int prot_val;
 	Protocol *akt = first;
 
-	//nastavenie pozÌciÌ 
 	position = akt->dest + akt->src;				//12. B
 	prot_pos = akt->ip->prot_pos;					//14. B
 	delimiter = akt->ip->d_ip;
 	delimiter2 = akt->ip->tcp->d_port;
-	http_val = akt->ip->tcp->ports[4].num;			//». portu - 80 (Dec)
 
+	//Zjednotenie funkcii do jednej, menia sa len parametre - Ë. portov
+	if (!strcmp("http", s)) {
+		prot_val = akt->ip->tcp->ports[4].num;
+	}
+	else if (!strcmp("https", s)) {
+		prot_val = akt->ip->tcp->ports[5].num;
+	}
+	else if (!strcmp("ftpc", s)) {
+		prot_val = akt->ip->tcp->ports[1].num;
+	}
+	else if (!strcmp("ftpd", s)) {
+		prot_val = akt->ip->tcp->ports[0].num;
+	}
+	else if (!strcmp("ssh", s)) {
+		prot_val = akt->ip->tcp->ports[2].num;
+	}
+	else if (!strcmp("telnet", s)) {
+		prot_val = akt->ip->tcp->ports[3].num;
+	}
+	
 	//Prechadzanie paketmi a urËenie HTTP
 	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
 
@@ -522,7 +517,8 @@ void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, in
 			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
 
 				//Hodnota cieloveho portu musÌ byù 80(https) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->tcp->d_port + 1] == http_val || pktdata[akt->ip->tcp->s_port + 1] == http_val) {
+				if ((pktdata[akt->ip->tcp->d_port + 1] + pktdata[akt->ip->tcp->d_port] * 256) == prot_val ||
+					(pktdata[akt->ip->tcp->s_port + 1] + pktdata[akt->ip->tcp->s_port] * 256) == prot_val) {
 					printf("Ramec: %d\n", tmp);
 					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
 					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
@@ -618,600 +614,6 @@ void Vypis_HTTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, in
 	}
 }
 
-//Vypis HTTPS komunik·ciÌ
-void Vypis_HTTPS(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int count, Protocol *first) {
-
-	int i, position, prot_pos, tmp = 0, pom = 0;
-	int delimiter, delimiter2;
-	Protocol *akt = first;
-	int https_val;
-
-	//nastavenie pozÌcie na 12 B (zaËiatok Ipv4)
-	position = akt->dest + akt->src;						//12. B
-	prot_pos = akt->ip->prot_pos;
-	delimiter = akt->ip->d_ip;
-	delimiter2 = akt->ip->tcp->d_port;
-	https_val = akt->ip->tcp->ports[5].num;					//443 - HTTPS
-
-	//Prechadzanie paketmi a urËenie HTTPS
-	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
-		tmp++;
-		//Zistenie Ëi sa jedn· o IPv4 (0800)
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
-
-			//Protokol HTTP sa nach·dza na na relaËnej vrtsve protokolu - TCP(06)
-			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
-
-				//Hodnota cieloveho portu musÌ byù 443(https) Dst port(pozicia druha tj(36+1)==37
-				if ((pktdata[akt->ip->tcp->d_port + 1] + pktdata[akt->ip->tcp->d_port] * 256) == https_val ||
-					(pktdata[akt->ip->tcp->s_port + 1] + pktdata[akt->ip->tcp->s_port] * 256) == https_val) {
-					printf("Ramec: %d\n", tmp);
-					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
-					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
-					printf("%s\n", akt->name);
-
-					printf("Zdrojova MAC adresa: ");
-					for (i = akt->dest; i < akt->dest + akt->src; i++) {
-						if (i == 11) {
-							printf("%.2x\n", pktdata[i]);
-							break;
-						}
-						printf("%.2x ", pktdata[i]);
-					}
-
-					printf("Cielova MAC adresa: ");
-					for (i = 0; i < akt->dest; i++) {
-						if (i == 5) {
-							printf("%.2x\n", pktdata[i]);
-							break;
-						}
-						printf("%.2x ", pktdata[i]);
-					}
-
-					//IPv4
-					printf("%s\n", akt->ip->name);
-					printf("Zdrojova IP adresa: ");
-					//Src IP
-					for (i = akt->ip->s_ip; i < delimiter; i++) {
-						if (i == delimiter - 1) {
-							printf("%d\n", pktdata[i]);
-							break;
-						}
-						printf("%d. ", pktdata[i]);
-					}
-					//Dst IP
-					printf("Cielova IP adresa: ");
-					for (i = delimiter; i < delimiter + akt->ip->len; i++) {
-						if (i == (delimiter + akt->ip->len - 1)) {
-							printf("%d\n", pktdata[i]);
-							break;
-						}
-						printf("%d. ", pktdata[i]);
-					}
-
-					//TCP
-					printf("%s\n", akt->ip->tcp->name);
-
-					//Porty
-					//Src
-					pom = 0;
-					printf("Zdrojovy port: ");
-					for (i = akt->ip->tcp->s_port; i < delimiter2; i++) {
-						if (i == akt->ip->tcp->s_port) {
-							pom = pktdata[i] * 256;
-						}
-						else
-						{
-							pom += pktdata[i];
-						}
-					}
-					printf("%d\n", pom);
-					//Dst
-					printf("Cielovy port: ");
-					for (i = delimiter2; i < delimiter2 + 2; i++) {
-						if (i == akt->ip->tcp->d_port) {
-							pom = pktdata[i] * 256;
-						}
-						else
-						{
-							pom += pktdata[i];
-						}
-					}
-					printf("%d\n", pom);			//Cielov˝ port
-					//Vypis Bytov(packetu)
-					for (i = 1; i <= header->caplen; i++) {
-
-						printf("%.2x ", pktdata[i - 1]);
-
-						if (i % LINE_LEN == 8) {
-							printf("  ");
-						}
-						else if (i % LINE_LEN == 0) {
-							printf("\n");
-						}
-					}
-					putchar('\n');
-					putchar('\n');
-				}
-			}
-		}
-	}
-}
-
-//V˝pis Telnet komunik·ciÌ
-void Vypis_Telnet(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Protocol *first) {
-	int i, position, prot_pos, tmp = 0, pom = 0;
-	int delimiter, delimiter2;
-	Protocol *akt = first;
-	int telnet_val;
-
-	//nastavenie pozÌcie na 12 B (zaËiatok Ipv4)
-	position = akt->dest + akt->src;					//12. B
-	prot_pos = akt->ip->prot_pos;
-	delimiter = akt->ip->d_ip;
-	delimiter2 = akt->ip->tcp->d_port;
-	telnet_val = akt->ip->tcp->ports[3].num;			//23 - TELNET
-
-	//Prechadzanie paketmi a urËenie Telnet
-	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
-		tmp++;
-		//Zistenie Ëi sa jedn· o IPv4 (0800) && IPv4
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
-
-			//Protokol HTTP sa nach·dza na na relaËnej vrtsve protokolu - TCP(06)
-			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
-
-				//Hodnota cieloveho portu musÌ byù 23(TELNET) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->tcp->d_port + 1] == telnet_val || pktdata[delimiter2 - 1] == telnet_val) {
-					printf("Ramec: %d\n", tmp);
-					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
-					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
-					printf("%s\n", akt->name);
-
-					printf("Zdrojova MAC adresa: ");
-					for (i = akt->dest; i < akt->dest + akt->src; i++) {
-						if (i == 11) {
-							printf("%.2x\n", pktdata[i]);
-							break;
-						}
-						printf("%.2x ", pktdata[i]);
-					}
-
-					printf("Cielova MAC adresa: ");
-					for (i = 0; i < akt->dest; i++) {
-						if (i == 5) {
-							printf("%.2x\n", pktdata[i]);
-							break;
-						}
-						printf("%.2x ", pktdata[i]);
-					}
-
-					//IPv4
-					printf("%s\n", akt->ip->name);
-					printf("Zdrojova IP adresa: ");
-					//Src IP
-					for (i = akt->ip->s_ip; i < delimiter; i++) {
-						if (i == delimiter - 1) {
-							printf("%d\n", pktdata[i]);
-							break;
-						}
-						printf("%d. ", pktdata[i]);
-					}
-					//Dst IP
-					printf("Cielova IP adresa: ");
-					for (i = delimiter; i < delimiter + akt->ip->len; i++) {
-						if (i == (delimiter + akt->ip->len - 1)) {
-							printf("%d\n", pktdata[i]);
-							break;
-						}
-						printf("%d. ", pktdata[i]);
-					}
-
-					//TCP
-					printf("%s\n", akt->ip->tcp->name);
-
-					//Porty
-					//Src
-					pom = 0;
-					printf("Zdrojovy port: ");
-					for (i = akt->ip->tcp->s_port; i < delimiter2; i++) {
-						if (i == akt->ip->tcp->s_port) {
-							pom = pktdata[i] * 256;
-						}
-						else
-						{
-							pom += pktdata[i];
-						}
-					}
-					printf("%d\n", pom);
-					//Dst
-					printf("Cielovy port: ");
-					for (i = delimiter2; i < delimiter2 + 2; i++) {
-						if (i == akt->ip->tcp->d_port) {
-							pom = pktdata[i] * 256;
-						}
-						else
-						{
-							pom += pktdata[i];
-						}
-					}
-					printf("%d\n", pom);
-
-					//Vypis Bytov(packetu)
-					for (i = 1; i <= header->caplen; i++) {
-
-						printf("%.2x ", pktdata[i - 1]);
-
-						if (i % LINE_LEN == 8) {
-							printf("  ");
-						}
-						else if (i % LINE_LEN == 0) {
-							printf("\n");
-						}
-					}
-					putchar('\n');
-					putchar('\n');
-				}
-			}
-		}
-	}
-}
-
-//V˝pis pre SSH komunik·ciu
-void Vypis_SSH(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Protocol *first) {
-	int i, position, prot_pos, tmp = 0, pom = 0;
-	int delimiter, delimiter2;
-	Protocol *akt = first;
-	int SSH_val;
-
-	//nastavenie pozÌcie na 12 B (zaËiatok Ipv4)
-	position = akt->dest + akt->src;								//12. B
-	prot_pos = akt->ip->prot_pos;									//14. B
-	delimiter = akt->ip->d_ip;
-	delimiter2 = akt->ip->tcp->d_port;
-	SSH_val = akt->ip->tcp->ports[2].num;							//22 - SSH
-
-	//Prechadzanie paketmi a urËenie SSHs
-	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
-		tmp++;
-		//Zistenie Ëi sa jedn· o IPv4 (0800) && IPv4
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
-
-			//Protokol HTTP sa nach·dza na na relaËnej vrtsve protokolu - TCP(06)
-			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
-
-				//Hodnota cieloveho portu musÌ byù 80(https) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->tcp->d_port + 1] == SSH_val || pktdata[delimiter2 - 1] == SSH_val) {
-					printf("Ramec: %d\n", tmp);
-					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
-					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
-					printf("%s\n", akt->name);
-
-					printf("Zdrojova MAC adresa: ");
-					for (i = akt->dest; i < akt->dest + akt->src; i++) {
-						if (i == 11) {
-							printf("%.2x\n", pktdata[i]);
-							break;
-						}
-						printf("%.2x ", pktdata[i]);
-					}
-
-					printf("Cielova MAC adresa: ");
-					for (i = 0; i < akt->dest; i++) {
-						if (i == 5) {
-							printf("%.2x\n", pktdata[i]);
-							break;
-						}
-						printf("%.2x ", pktdata[i]);
-					}
-
-					//IPv4
-					printf("%s\n", akt->ip->name);
-					printf("Zdrojova IP adresa: ");
-					//Src IP
-					for (i = akt->ip->s_ip; i < delimiter; i++) {
-						if (i == delimiter - 1) {
-							printf("%d\n", pktdata[i]);
-							break;
-						}
-						printf("%d. ", pktdata[i]);
-					}
-					//Dst IP
-					printf("Cielova IP adresa: ");
-					for (i = delimiter; i < delimiter + akt->ip->len; i++) {
-						if (i == (delimiter + akt->ip->len - 1)) {
-							printf("%d\n", pktdata[i]);
-							break;
-						}
-						printf("%d. ", pktdata[i]);
-					}
-
-					//TCP
-					printf("%s\n", akt->ip->tcp->name);
-
-					//Porty - vöetky su prevedenÈ do Decim·lnej s˙stavy
-					//Src Port
-					pom = 0;
-					printf("Zdrojovy port: ");
-					for (i = akt->ip->tcp->s_port; i < delimiter2; i++) {
-						if (i == akt->ip->tcp->s_port) {
-							pom = pktdata[i] * 256;
-						}
-						else
-						{
-							pom += pktdata[i];
-						}
-					}
-					printf("%d\n", pom);
-					//Dst Port
-					printf("Cielovy port: ");
-					for (i = delimiter2; i < delimiter2 + 2; i++) {
-						if (i == akt->ip->tcp->d_port) {
-							pom = pktdata[i] * 256;
-						}
-						else
-						{
-							pom += pktdata[i];
-						}
-					}
-					printf("%d\n", pom);
-
-					//Vypis Bytov(packetu)
-					for (i = 1; i <= header->caplen; i++) {
-
-						printf("%.2x ", pktdata[i - 1]);
-
-						if (i % LINE_LEN == 8) {
-							printf("  ");
-						}
-						else if (i % LINE_LEN == 0) {
-							printf("\n");
-						}
-					}
-					putchar('\n');
-					putchar('\n');
-				}
-			}
-		}
-	}
-}
-
-//V˝pis pre FTP riadiacu komunik·ciu - port Ë:	21(FTP-Control)
-void Vypis_FTP_Control(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Protocol *first) {
-	int i, position, prot_pos, tmp = 0, pom = 0;
-	int delimiter, delimiter2;
-	Protocol *akt = first;
-	int ftp_val;
-
-	//nastavenie pozÌcie na 12 B (zaËiatok Ipv4)
-	position = akt->dest + akt->src;//12. B
-	prot_pos = akt->ip->prot_pos;
-	delimiter = akt->ip->d_ip;
-	delimiter2 = akt->ip->tcp->d_port;
-	ftp_val = akt->ip->tcp->ports[1].num;
-
-	//Prechadzanie paketmi a urËenie FTP
-	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
-		tmp++;
-		//Zistenie Ëi sa jedn· o IPv4 (0800)
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
-
-			//Protokol HTTP sa nach·dza na na relaËnej vrtsve protokolu - TCP(06)
-			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
-
-				//Hodnota cieloveho portu musÌ byù 80(https) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->tcp->d_port + 1] == ftp_val || pktdata[delimiter2 - 1] == ftp_val) {
-					printf("Ramec: %d\n", tmp);
-					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
-					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
-					printf("%s\n", akt->name);
-
-					printf("Zdrojova MAC adresa: ");
-					for (i = akt->dest; i < akt->dest + akt->src; i++) {
-						if (i == 11) {
-							printf("%.2x\n", pktdata[i]);
-							break;
-						}
-						printf("%.2x ", pktdata[i]);
-					}
-
-					printf("Cielova MAC adresa: ");
-					for (i = 0; i < akt->dest; i++) {
-						if (i == 5) {
-							printf("%.2x\n", pktdata[i]);
-							break;
-						}
-						printf("%.2x ", pktdata[i]);
-					}
-
-					//IPv4
-					printf("%s\n", akt->ip->name);
-					printf("Zdrojova IP adresa: ");
-					//Src IP
-					for (i = akt->ip->s_ip; i < delimiter; i++) {
-						if (i == delimiter - 1) {
-							printf("%d\n", pktdata[i]);
-							break;
-						}
-						printf("%d. ", pktdata[i]);
-					}
-					//Dst IP
-					printf("Cielova IP adresa: ");
-					for (i = delimiter; i < delimiter + akt->ip->len; i++) {
-						if (i == (delimiter + akt->ip->len - 1)) {
-							printf("%d\n", pktdata[i]);
-							break;
-						}
-						printf("%d. ", pktdata[i]);
-					}
-
-					//TCP
-					printf("%s\n", akt->ip->tcp->name);
-
-					//Porty
-					//Src
-					pom = 0;
-					printf("Zdrojovy port: ");
-					for (i = akt->ip->tcp->s_port; i < delimiter2; i++) {
-						if (i == akt->ip->tcp->s_port) {
-							pom = pktdata[i] * 256;
-						}
-						else
-						{
-							pom += pktdata[i];
-						}
-					}
-					printf("%d\n", pom);
-					//Dst
-					printf("Cielovy port: ");
-					for (i = delimiter2; i < delimiter2 + 2; i++) {
-						if (i == akt->ip->tcp->d_port) {
-							pom = pktdata[i] * 256;
-						}
-						else
-						{
-							pom += pktdata[i];
-						}
-					}
-					printf("%d\n", pom);
-					//Vypis Bytov(packetu)
-					for (i = 1; i <= header->caplen; i++) {
-
-						printf("%.2x ", pktdata[i - 1]);
-
-						if (i % LINE_LEN == 8) {
-							printf("  ");
-						}
-						else if (i % LINE_LEN == 0) {
-							printf("\n");
-						}
-					}
-					putchar('\n');
-					putchar('\n');
-				}
-			}
-		}
-	}
-}
-
-//V˝pis pre FTP d·tov˙ komunik·ciu
-void Vypis_FTP_Data(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Protocol *first) {
-	int i, position, prot_pos, tmp = 0, pom = 0;
-	int delimiter, delimiter2;
-	Protocol *akt = first;
-	int ftpd_val;
-
-	//nastavenie pozÌcie na 12 B (zaËiatok Ipv4)
-	position = akt->dest + akt->src;//12. B
-	prot_pos = akt->ip->prot_pos;
-	delimiter = akt->ip->d_ip;
-	delimiter2 = akt->ip->tcp->d_port;
-	ftpd_val = akt->ip->tcp->ports[0].num;
-
-	//Prechadzanie paketmi a urËenie FTP - data
-	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
-		tmp++;
-		//Zistenie Ëi sa jedn· o IPv4 (0800) && IPv4
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
-
-			//Protokol HTTP sa nach·dza na na relaËnej vrtsve protokolu - TCP(06)
-			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
-
-				//Hodnota cieloveho portu musÌ byù 20(ftp - data) Dst port(pozicia druha tj(36+1)==37
-				if (pktdata[akt->ip->tcp->d_port + 1] == ftpd_val || pktdata[delimiter2 - 1] == ftpd_val) {
-					printf("Ramec: %d\n", tmp);
-					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
-					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
-					printf("%s\n", akt->name);
-
-					printf("Zdrojova MAC adresa: ");
-					for (i = akt->dest; i < akt->dest + akt->src; i++) {
-						if (i == 11) {
-							printf("%.2x\n", pktdata[i]);
-							break;
-						}
-						printf("%.2x ", pktdata[i]);
-					}
-
-					printf("Cielova MAC adresa: ");
-					for (i = 0; i < akt->dest; i++) {
-						if (i == 5) {
-							printf("%.2x\n", pktdata[i]);
-							break;
-						}
-						printf("%.2x ", pktdata[i]);
-					}
-
-					//IPv4
-					printf("%s\n", akt->ip->name);
-					printf("Zdrojova IP adresa: ");
-					//Src IP
-					for (i = akt->ip->s_ip; i < delimiter; i++) {
-						if (i == delimiter - 1) {
-							printf("%d\n", pktdata[i]);
-							break;
-						}
-						printf("%d. ", pktdata[i]);
-					}
-					//Dst IP
-					printf("Cielova IP adresa: ");
-					for (i = delimiter; i < delimiter + akt->ip->len; i++) {
-						if (i == (delimiter + akt->ip->len - 1)) {
-							printf("%d\n", pktdata[i]);
-							break;
-						}
-						printf("%d. ", pktdata[i]);
-					}
-
-					//TCP
-					printf("%s\n", akt->ip->tcp->name);
-
-					//Porty
-					//Src
-					pom = 0;
-					printf("Zdrojovy port: ");
-					for (i = akt->ip->tcp->s_port; i < delimiter2; i++) {
-						if (i == akt->ip->tcp->s_port) {
-							pom = pktdata[i] * 256;
-						}
-						else
-						{
-							pom += pktdata[i];
-						}
-					}
-					printf("%d\n", pom);
-					//Dst
-					printf("Cielovy port: ");
-					for (i = delimiter2; i < delimiter2 + 2; i++) {
-						if (i == akt->ip->tcp->d_port) {
-							pom = pktdata[i] * 256;
-						}
-						else
-						{
-							pom += pktdata[i];
-						}
-					}
-					printf("%d\n", pom);
-
-					//Vypis Bytov(packetu)
-					for (i = 1; i <= header->caplen; i++) {
-
-						printf("%.2x ", pktdata[i - 1]);
-
-						if (i % LINE_LEN == 8) {
-							printf("  ");
-						}
-						else if (i % LINE_LEN == 0) {
-							printf("\n");
-						}
-					}
-					putchar('\n');
-					putchar('\n');
-				}
-			}
-		}
-	}
-}
 
 //V˝pis pre TFTP komunik·ciu
 void Vypis_TFTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Protocol *first) {
@@ -1700,7 +1102,6 @@ void Intro() {
 	printf("i: Vypis pre ARP komunikaciu\n");
 	printf("j: Vypis pre DNS komunik·ciu UDP\n");
 	printf("k: Koniec programu\n");
-
 }
 
 void Dns_udp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Protocol *first) {
@@ -1857,7 +1258,7 @@ void Dns_udp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Proto
 int main(void) {
 
 	char errbuff[PCAP_ERRBUF_SIZE];
-	char path[] = "C:\\Users\\Pavol GrofËÌk\\Documents\\Visual Studio 2017\\Projects\\Winpcap\\Winpcap\\trace-2.pcap";
+	char path[] = "C:\\Users\\Pavol GrofËÌk\\Documents\\Visual Studio 2017\\Projects\\Winpcap\\Winpcap\\eth-5.pcap";
 	int c, count = 0;													//Ud·va poradovÈ ËÌslo r·mca ,poËet vöetk˝ch r·mcov nach·dzaj˙cich sa v s˙bore
 
 	pcap_t *f = NULL;													//SmernÌk na sp·jan˝ zoznam packetov zo s˙boru
@@ -1884,7 +1285,7 @@ int main(void) {
 		struct tm *tm = localtime(&t);
 		char s[64];
 
-		printf("Vitajte!\n");
+	
 		//printf("Dnes: ");
 		strftime(s, sizeof(s), "%c", tm);
 		printf("%s\n\n", s);
@@ -1894,31 +1295,31 @@ int main(void) {
 		//NaËÌtanie protokolov a inform·ciÌ do sp·janÈho zoznamu
 		nacitaj(&first, r);
 
-
+	
 		while ((c = getchar()) != 'k') {
 
 			switch (c) {
 				//Bod c. 1
-			case '1':Point_1(f, header, pktdata, &count, first),					//Oöetriù len pre ipv4 pozor na IIEE 802.3 len pre Ethernet II, porobiù bod a do f cez jednu funkciu
+			case '1':Point_1(f, header, pktdata, &count, first),								//Oöetriù len pre ipv4 pozor na IIEE 802.3 len pre Ethernet II, porobiù bod a do f cez jednu funkciu
 				pcap_close(f),
 				(f = (pcap_open_offline(path, errbuff))),
 				Vypis_ip(f, first, header, pktdata, count, path);
 				break;
 
 			//Bod c. 3 
-			case 'a':Vypis_HTTP(f, header, pktdata, count, first); break;			//V˝pis pre HTTP
-			case 'b':Vypis_HTTPS(f, header, pktdata, count, first); break;			//V˝pis pre HTTPS
-			case 'c':Vypis_Telnet(f, header, pktdata, first); break;				//V˝pis pre TELNET
-			case 'd':Vypis_SSH(f, header, pktdata, first); break;					//V˝pis pre SSH
-			case 'e':Vypis_FTP_Control(f, header, pktdata, first); break;			//V˝pis pre FTP-Control
-			case 'f':Vypis_FTP_Data(f, header, pktdata, first); break;				//V˝pis pre FTP-Data
-			case 'g':Vypis_TFTP(f, header, pktdata, first); break;					//V˝pis pre TFTP
-			case 'h':Vypis_ICMP(f, header, pktdata, first); break;					//V˝pis pre ICMP
-			case 'i':Vypis_Arp(f, header, pktdata, count, first, path); break;		//V˝pis pre ARP 
-			case 'j':Dns_udp(f, header, pktdata, first); break;						//V˝pis DND pre UDP
+			case 'a':Print_Protocol(f, header, pktdata, count, first,"http"); break;				//V˝pis pre HTTP
+			case 'b':Print_Protocol(f, header, pktdata, count, first,"https"); break;				//V˝pis pre HTTPS
+			case 'c':Print_Protocol(f, header, pktdata, count, first,"telnet"); break;				//V˝pis pre TELNET
+			case 'd':Print_Protocol(f, header, pktdata, count, first,"ssh"); break;					//V˝pis pre SSH
+			case 'e':Print_Protocol(f, header, pktdata, count, first,"ftpc"); break;				//V˝pis pre FTP-Control
+			case 'f':Print_Protocol(f, header, pktdata, count, first,"ftpd"); break;				//V˝pis pre FTP-Data
+			case 'g':Vypis_TFTP(f, header, pktdata, first); break;									//V˝pis pre TFTP
+			case 'h':Vypis_ICMP(f, header, pktdata, first); break;									//V˝pis pre ICMP
+			case 'i':Vypis_Arp(f, header, pktdata, count, first, path); break;						//V˝pis pre ARP 
+			case 'j':Dns_udp(f, header, pktdata, first); break;										//V˝pis DND pre UDP
 
 			}
-			f = (pcap_open_offline(path, errbuff));									//Rewind pcap_t *f
+			f = (pcap_open_offline(path, errbuff));												//Rewind pcap_t *f
 
 		}
 
