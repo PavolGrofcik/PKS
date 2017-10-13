@@ -615,6 +615,7 @@ void Print_Protocol(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata
 		if ((pktdata[akt->ip->tcp->d_port + 1] + pktdata[akt->ip->tcp->d_port] * 256) == prot_val ||
 			(pktdata[akt->ip->tcp->s_port + 1] + pktdata[akt->ip->tcp->s_port] * 256) == prot_val) {
 			
+			//nerátam tu zvyšne porty ako podla wiresharku
 			arr[n] = flag;								//Hodnota rámca - t.j èíslo
 			n++;
 			more = realloc(arr, (n+1)*sizeof(int));		//Poèet prvkov po¾a je vdy o jedna väèší treba ís o -2 pozície
@@ -665,13 +666,110 @@ void Print_Protocol(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata
 	free(arr);	//uvolnenie po¾a
 }
 
+void vypis_tftp(Protocol *first, struct pcap_pkthdr *header, const u_char *pktdata, int frame) {
+	int i, pom, delimiter;
+	Protocol *akt = first;
+
+	delimiter = akt->ip->d_ip;
+
+	printf("Ramec: %d\n", frame);
+	printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
+	printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
+	printf("%s\n", akt->name);
+
+	printf("Zdrojova MAC adresa: ");
+	for (i = akt->dest; i < akt->dest + akt->src; i++) {
+		if (i == 11) {
+			printf("%.2x\n", pktdata[i]);
+			break;
+		}
+		printf("%.2x ", pktdata[i]);
+	}
+
+	printf("Cielova MAC adresa: ");
+	for (i = 0; i < akt->dest; i++) {
+		if (i == 5) {
+			printf("%.2x\n", pktdata[i]);
+			break;
+		}
+		printf("%.2x ", pktdata[i]);
+	}
+
+	//IPv4
+	printf("%s\n", akt->ip->name);
+	printf("Zdrojova IP adresa: ");
+	//Src IP
+	for (i = akt->ip->s_ip; i < delimiter; i++) {
+		if (i == delimiter - 1) {
+			printf("%d\n", pktdata[i]);
+			break;
+		}
+		printf("%d. ", pktdata[i]);
+	}
+	//Dst IP
+	printf("Cielova IP adresa: ");
+	for (i = delimiter; i < delimiter + akt->ip->len; i++) {
+		if (i == (delimiter + akt->ip->len - 1)) {
+			printf("%d\n", pktdata[i]);
+			break;
+		}
+		printf("%d. ", pktdata[i]);
+	}
+
+	//UDP
+	printf("%s\n", akt->ip->udp->name);
+
+	//Porty
+	//Src
+	pom = 0;
+	printf("Zdrojovy port: ");
+	for (i = akt->ip->udp->s_port; i < akt->ip->udp->d_port; i++) {
+		if (i == akt->ip->tcp->s_port) {
+			pom = pktdata[i] * 256;
+		}
+		else
+		{
+			pom += pktdata[i];
+		}
+	}
+	printf("%d\n", pom);
+	//Dst
+	printf("Cielovy port: ");
+	for (i = akt->ip->udp->d_port; i < akt->ip->udp->d_port + 2; i++) {
+		if (i == akt->ip->tcp->d_port) {
+			pom = pktdata[i] * 256;
+		}
+		else
+		{
+			pom += pktdata[i];
+		}
+	}
+	printf("%d\n", pom);
+
+	//Vypis Bytov(packetu)
+	for (i = 1; i <= header->caplen; i++) {
+
+		printf("%.2x ", pktdata[i - 1]);
+
+		if (i % LINE_LEN == 8) {
+			printf("  ");
+		}
+		else if (i % LINE_LEN == 0) {
+			printf("\n");
+		}
+	}
+	putchar('\n');
+	putchar('\n');
+	akt = NULL;
+}
+
 
 //Vıpis pre TFTP komunikáciu
 void Vypis_TFTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Protocol *first, char path[]) {
 	int i, position, prot_pos, tmp = 0, pom = 0;
-	int delimiter, delimiter2;
+	int delimiter;
 	Protocol *akt = first;
-	int def_port = 69;												//port pod¾a ktorého budeme sledova celú ftp komunikáciu
+	int def_port = 69;																					//port pod¾a ktorého budeme sledova celú ftp komunikáciu
 	int *arr = NULL, *more = NULL;
 	int flag, n, arrpos, k = 11;
 	char errbuff[10];
@@ -689,9 +787,10 @@ void Vypis_TFTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pr
 		if ((pktdata[akt->ip->tcp->d_port + 1] + pktdata[akt->ip->tcp->d_port] * 256) == def_port ||
 			(pktdata[akt->ip->tcp->s_port + 1] + pktdata[akt->ip->tcp->s_port] * 256) == def_port) {
 
-			arr[n] = flag;								//Hodnota rámca - t.j èíslo
+			def_port = pktdata[akt->ip->tcp->s_port + 1] + pktdata[akt->ip->tcp->s_port] * 256;			//celá komunikácia pod¾a wireshark
+			arr[n] = flag;																				//Hodnota rámca - t.j èíslo
 			n++;
-			more = realloc(arr, (n + 1) * sizeof(int));		//Poèet prvkov po¾a je vdy o jedna väèší treba ís o -2 pozície
+			more = realloc(arr, (n + 1) * sizeof(int));													//Poèet prvkov po¾a je vdy o jedna väèší treba ís o -2 pozície
 			arr = more;
 		}
 	}
@@ -707,191 +806,11 @@ void Vypis_TFTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pr
 			if (arr[arrpos] == tmp && flag < 10) {
 				flag++;
 				arrpos++;
-					printf("Ramec: %d\n", tmp);
-					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
-					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
-					printf("%s\n", akt->name);
-
-					//def port podla ktorého src portu budeme sledova celu komunikáciu(tftp server ma rozne portu ale rovnanke dst porty)
-					def_port = pktdata[akt->ip->udp->s_port] * 256 + pktdata[akt->ip->udp->s_port + 1];
-
-					printf("Zdrojova MAC adresa: ");
-					for (i = akt->dest; i < akt->dest + akt->src; i++) {
-						if (i == 11) {
-							printf("%.2x\n", pktdata[i]);
-							break;
-						}
-						printf("%.2x ", pktdata[i]);
-					}
-
-					printf("Cielova MAC adresa: ");
-					for (i = 0; i < akt->dest; i++) {
-						if (i == 5) {
-							printf("%.2x\n", pktdata[i]);
-							break;
-						}
-						printf("%.2x ", pktdata[i]);
-					}
-
-					//IPv4
-					printf("%s\n", akt->ip->name);
-					printf("Zdrojova IP adresa: ");
-					//Src IP
-					for (i = akt->ip->s_ip; i < delimiter; i++) {
-						if (i == delimiter - 1) {
-							printf("%d\n", pktdata[i]);
-							break;
-						}
-						printf("%d. ", pktdata[i]);
-					}
-					//Dst IP
-					printf("Cielova IP adresa: ");
-					for (i = delimiter; i < delimiter + akt->ip->len; i++) {
-						if (i == (delimiter + akt->ip->len - 1)) {
-							printf("%d\n", pktdata[i]);
-							break;
-						}
-						printf("%d. ", pktdata[i]);
-					}
-
-					//UDP
-					printf("%s\n", akt->ip->udp->name);
-
-					//Porty
-					//Src
-					pom = 0;
-					printf("Zdrojovy port: ");
-					for (i = akt->ip->udp->s_port; i < akt->ip->udp->d_port; i++) {
-						if (i == akt->ip->tcp->s_port) {
-							pom = pktdata[i] * 256;
-						}
-						else
-						{
-							pom += pktdata[i];
-						}
-					}
-					printf("%d\n", pom);
-					//Dst
-					printf("Cielovy port: ");
-					for (i = akt->ip->udp->d_port; i < akt->ip->udp->d_port + 2; i++) {
-						if (i == akt->ip->tcp->d_port) {
-							pom = pktdata[i] * 256;
-						}
-						else
-						{
-							pom += pktdata[i];
-						}
-					}
-					printf("%d\n", pom);
-
-					//Vypis Bytov(packetu)
-					for (i = 1; i <= header->caplen; i++) {
-
-						printf("%.2x ", pktdata[i - 1]);
-
-						if (i % LINE_LEN == 8) {
-							printf("  ");
-						}
-						else if (i % LINE_LEN == 0) {
-							printf("\n");
-						}
-					}
-					putchar('\n');
-					putchar('\n');
+				vypis_tftp(first, header, pktdata, tmp);
 			}
 			else if (arr[n - k + 1] == tmp && k > 1) {
 				k--;
-				printf("Ramec: %d\n", tmp);
-				printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
-				printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
-				printf("%s\n", akt->name);
-
-				//def port podla ktorého src portu budeme sledova celu komunikáciu(tftp server ma rozne portu ale rovnanke dst porty)
-				def_port = pktdata[akt->ip->udp->s_port] * 256 + pktdata[akt->ip->udp->s_port + 1];
-
-				printf("Zdrojova MAC adresa: ");
-				for (i = akt->dest; i < akt->dest + akt->src; i++) {
-					if (i == 11) {
-						printf("%.2x\n", pktdata[i]);
-						break;
-					}
-					printf("%.2x ", pktdata[i]);
-				}
-
-				printf("Cielova MAC adresa: ");
-				for (i = 0; i < akt->dest; i++) {
-					if (i == 5) {
-						printf("%.2x\n", pktdata[i]);
-						break;
-					}
-					printf("%.2x ", pktdata[i]);
-				}
-
-				//IPv4
-				printf("%s\n", akt->ip->name);
-				printf("Zdrojova IP adresa: ");
-				//Src IP
-				for (i = akt->ip->s_ip; i < delimiter; i++) {
-					if (i == delimiter - 1) {
-						printf("%d\n", pktdata[i]);
-						break;
-					}
-					printf("%d. ", pktdata[i]);
-				}
-				//Dst IP
-				printf("Cielova IP adresa: ");
-				for (i = delimiter; i < delimiter + akt->ip->len; i++) {
-					if (i == (delimiter + akt->ip->len - 1)) {
-						printf("%d\n", pktdata[i]);
-						break;
-					}
-					printf("%d. ", pktdata[i]);
-				}
-
-				//UDP
-				printf("%s\n", akt->ip->udp->name);
-
-				//Porty
-				//Src
-				pom = 0;
-				printf("Zdrojovy port: ");
-				for (i = akt->ip->udp->s_port; i < akt->ip->udp->d_port; i++) {
-					if (i == akt->ip->tcp->s_port) {
-						pom = pktdata[i] * 256;
-					}
-					else
-					{
-						pom += pktdata[i];
-					}
-				}
-				printf("%d\n", pom);
-				//Dst
-				printf("Cielovy port: ");
-				for (i = akt->ip->udp->d_port; i < akt->ip->udp->d_port + 2; i++) {
-					if (i == akt->ip->tcp->d_port) {
-						pom = pktdata[i] * 256;
-					}
-					else
-					{
-						pom += pktdata[i];
-					}
-				}
-				printf("%d\n", pom);
-
-				//Vypis Bytov(packetu)
-				for (i = 1; i <= header->caplen; i++) {
-
-					printf("%.2x ", pktdata[i - 1]);
-
-					if (i % LINE_LEN == 8) {
-						printf("  ");
-					}
-					else if (i % LINE_LEN == 0) {
-						printf("\n");
-					}
-				}
-				putchar('\n');
-				putchar('\n');
+				vypis_tftp(first, header, pktdata, tmp);
 				}
 			}
 	}
@@ -903,99 +822,7 @@ void Vypis_TFTP(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Pr
 			if (pktdata[akt->ip->udp->d_port + 1] == akt->ip->udp->ports[0].num ||
 				((pktdata[akt->ip->udp->s_port] * 256 + pktdata[akt->ip->udp->s_port + 1]) == def_port) ||
 				((pktdata[akt->ip->udp->d_port] * 256 + pktdata[akt->ip->udp->d_port + 1]) == def_port)) {
-
-
-				printf("Ramec: %d\n", tmp);
-				printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
-				printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
-				printf("%s\n", akt->name);
-
-				//def port podla ktorého src portu budeme sledova celu komunikáciu(tftp server ma rozne portu ale rovnanke dst porty)
-				def_port = pktdata[akt->ip->udp->s_port] * 256 + pktdata[akt->ip->udp->s_port + 1];
-
-				printf("Zdrojova MAC adresa: ");
-				for (i = akt->dest; i < akt->dest + akt->src; i++) {
-					if (i == 11) {
-						printf("%.2x\n", pktdata[i]);
-						break;
-					}
-					printf("%.2x ", pktdata[i]);
-				}
-
-				printf("Cielova MAC adresa: ");
-				for (i = 0; i < akt->dest; i++) {
-					if (i == 5) {
-						printf("%.2x\n", pktdata[i]);
-						break;
-					}
-					printf("%.2x ", pktdata[i]);
-				}
-
-				//IPv4
-				printf("%s\n", akt->ip->name);
-				printf("Zdrojova IP adresa: ");
-				//Src IP
-				for (i = akt->ip->s_ip; i < delimiter; i++) {
-					if (i == delimiter - 1) {
-						printf("%d\n", pktdata[i]);
-						break;
-					}
-					printf("%d. ", pktdata[i]);
-				}
-				//Dst IP
-				printf("Cielova IP adresa: ");
-				for (i = delimiter; i < delimiter + akt->ip->len; i++) {
-					if (i == (delimiter + akt->ip->len - 1)) {
-						printf("%d\n", pktdata[i]);
-						break;
-					}
-					printf("%d. ", pktdata[i]);
-				}
-
-				//UDP
-				printf("%s\n", akt->ip->udp->name);
-
-				//Porty
-				//Src
-				pom = 0;
-				printf("Zdrojovy port: ");
-				for (i = akt->ip->udp->s_port; i < akt->ip->udp->d_port; i++) {
-					if (i == akt->ip->tcp->s_port) {
-						pom = pktdata[i] * 256;
-					}
-					else
-					{
-						pom += pktdata[i];
-					}
-				}
-				printf("%d\n", pom);
-				//Dst
-				printf("Cielovy port: ");
-				for (i = akt->ip->udp->d_port; i < akt->ip->udp->d_port + 2; i++) {
-					if (i == akt->ip->tcp->d_port) {
-						pom = pktdata[i] * 256;
-					}
-					else
-					{
-						pom += pktdata[i];
-					}
-				}
-				printf("%d\n", pom);
-
-				//Vypis Bytov(packetu)
-				for (i = 1; i <= header->caplen; i++) {
-
-					printf("%.2x ", pktdata[i - 1]);
-
-					if (i % LINE_LEN == 8) {
-						printf("  ");
-					}
-					else if (i % LINE_LEN == 0) {
-						printf("\n");
-					}
-				}
-				putchar('\n');
-				putchar('\n');
+				vypis_tftp(first, header, pktdata, tmp);
 			}
 		}
 	}
@@ -1522,7 +1349,7 @@ void Dns_udp(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, Proto
 int main(void) {
 
 	char errbuff[PCAP_ERRBUF_SIZE];
-	char path[] = "C:\\Users\\Pavol Grofèík\\Documents\\Visual Studio 2017\\Projects\\Winpcap\\Winpcap\\eth-5.pcap";
+	char path[] = "C:\\Users\\Pavol Grofèík\\Documents\\Visual Studio 2017\\Projects\\Winpcap\\Winpcap\\eth-8.pcap";
 	int c, count = 0;													//Udáva poradové èíslo rámca ,poèet všetkıch rámcov nachádzajúcich sa v súbore
 
 	pcap_t *f = NULL;													//Smerník na spájanı zoznam packetov zo súboru
@@ -1577,7 +1404,7 @@ int main(void) {
 			case 'd':Print_Protocol(f, header, pktdata, count, first,"ssh",path); break;				//Vıpis pre SSH
 			case 'e':Print_Protocol(f, header, pktdata, count, first,"ftpc",path); break;				//Vıpis pre FTP-Control
 			case 'f':Print_Protocol(f, header, pktdata, count, first,"ftpd",path); break;				//Vıpis pre FTP-Data
-			case 'g':Vypis_TFTP(f, header, pktdata, first,path); break;										//Vıpis pre TFTP
+			case 'g':Vypis_TFTP(f, header, pktdata, first,path); break;									//Vıpis pre TFTP
 			case 'h':Vypis_ICMP(f, header, pktdata, first); break;										//Vıpis pre ICMP
 			case 'i':Vypis_Arp(f, header, pktdata, count, first, path); break;							//Vıpis pre ARP 
 			case 'j':Dns_udp(f, header, pktdata, first); break;											//Vıpis DND pre UDP
