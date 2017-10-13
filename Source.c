@@ -473,12 +473,15 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 }
 
 
-//V˝pis pre HTTP komunik·cie
-void Print_Protocol(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int count, Protocol *first, char s[]) {
+//V˝pis pre  komunik·cie
+void Print_Protocol(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata, int count, Protocol *first, char s[],char path[]) {
 
-	int i, position, prot_pos, tmp = 0, pom = 0;
+	int i, position, prot_pos, tmp = 0, pom = 0, n, k = 11;
 	int delimiter, delimiter2;
 	int prot_val;
+	char errbuff[10];
+	int *arr = NULL, *more = NULL;
+	int flag, arrpos = 0;
 	Protocol *akt = first;
 
 	position = akt->dest + akt->src;				//12. B
@@ -505,113 +508,329 @@ void Print_Protocol(pcap_t *f, struct pcap_pkthdr *header, const u_char *pktdata
 	else if (!strcmp("telnet", s)) {
 		prot_val = akt->ip->tcp->ports[3].num;
 	}
-	
-	//Prechadzanie paketmi a urËenie HTTP
-	while ((pcap_next_ex(f, &header, &pktdata)) >= 0) {
 
-		tmp++;																				//»Ìslo r·mca
-		//Zistenie Ëi sa jedn· o IPv4 (0800) && IPv4
-		if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
+	arr = (int *)malloc(sizeof(int));
+	flag = n = arrpos = 0;
+	//Prejdenie zoznamu a vyhladanie poËtu danej komunik·cie
+	while (pcap_next_ex(f, &header, &pktdata) > 0) {
+		flag++;
+		if ((pktdata[akt->ip->tcp->d_port + 1] + pktdata[akt->ip->tcp->d_port] * 256) == prot_val ||
+			(pktdata[akt->ip->tcp->s_port + 1] + pktdata[akt->ip->tcp->s_port] * 256) == prot_val) {
+			
+			arr[n] = flag;								//Hodnota r·mca - t.j ËÌslo
+			n++;
+			more = realloc(arr, (n+1)*sizeof(int));		//PoËet prvkov poæa je vûdy o jedna v‰ËöÌ treba Ìsù o -2 pozÌcie
+			arr = more;
+		}
+	}
+	printf("Pocet n je :%d\n", n);
 
-			//Protokol HTTP sa nach·dza na na relaËnej vrtsve podprotokolu - TCP(06)
-			if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
+	f = pcap_open_offline(path, errbuff);
+	tmp = flag = 0;
+	if (n + 1 >= 20) {												//PoËet komunik·cii je viac neû 20
 
-				//Hodnota cieloveho portu musÌ byù 80(https) Dst port(pozicia druha tj(36+1)==37
-				if ((pktdata[akt->ip->tcp->d_port + 1] + pktdata[akt->ip->tcp->d_port] * 256) == prot_val ||
-					(pktdata[akt->ip->tcp->s_port + 1] + pktdata[akt->ip->tcp->s_port] * 256) == prot_val) {
-					printf("Ramec: %d\n", tmp);
-					printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
-					printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
-					printf("%s\n", akt->name);
+		while ((pcap_next_ex(f, &header, &pktdata)) > 0) {
+			tmp++;
+			if (arr[arrpos] == tmp && flag < 10) {					//V˝pis prv˝ch 10
+				arrpos++;											//PozÌcia v poli
+				flag++;												//PrÌznak
+				printf("Ramec: %d\n", tmp);
+				printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
+				printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
+				printf("%s\n", akt->name);
 
-					//MAC adresy
-					printf("Zdrojova MAC adresa: ");
-					for (i = akt->dest; i < akt->dest + akt->src; i++) {
-						if (i == 11) {
-							printf("%.2x\n", pktdata[i]);
-							break;
-						}
-						printf("%.2x ", pktdata[i]);
+				//MAC adresy
+				printf("Zdrojova MAC adresa: ");
+				for (i = akt->dest; i < akt->dest + akt->src; i++) {
+					if (i == 11) {
+						printf("%.2x\n", pktdata[i]);
+						break;
 					}
+					printf("%.2x ", pktdata[i]);
+				}
 
-					printf("Cielova MAC adresa: ");
-					for (i = 0; i < akt->dest; i++) {
-						if (i == 5) {
-							printf("%.2x\n", pktdata[i]);
-							break;
-						}
-						printf("%.2x ", pktdata[i]);
+				printf("Cielova MAC adresa: ");
+				for (i = 0; i < akt->dest; i++) {
+					if (i == 5) {
+						printf("%.2x\n", pktdata[i]);
+						break;
 					}
+					printf("%.2x ", pktdata[i]);
+				}
 
-					//IPv4
-					printf("%s\n", akt->ip->name);
-					//Src IP
-					printf("Zdrojova IP adresa: ");
-					for (i = akt->ip->s_ip; i < delimiter; i++) {
-						if (i == delimiter - 1) {
-							printf("%d\n", pktdata[i]);
-							break;
-						}
-						printf("%d. ", pktdata[i]);
+				//IPv4
+				printf("%s\n", akt->ip->name);
+				//Src IP
+				printf("Zdrojova IP adresa: ");
+				for (i = akt->ip->s_ip; i < delimiter; i++) {
+					if (i == delimiter - 1) {
+						printf("%d\n", pktdata[i]);
+						break;
 					}
-					//Dst IP
-					printf("Cielova IP adresa: ");
-					for (i = delimiter; i < delimiter + akt->ip->len; i++) {
-						if (i == (delimiter + akt->ip->len - 1)) {
-							printf("%d\n", pktdata[i]);
-							break;
-						}
-						printf("%d. ", pktdata[i]);
+					printf("%d. ", pktdata[i]);
+				}
+				//Dst IP
+				printf("Cielova IP adresa: ");
+				for (i = delimiter; i < delimiter + akt->ip->len; i++) {
+					if (i == (delimiter + akt->ip->len - 1)) {
+						printf("%d\n", pktdata[i]);
+						break;
 					}
+					printf("%d. ", pktdata[i]);
+				}
 
-					//TCP name
-					printf("%s\n", akt->ip->tcp->name);
+				//TCP name
+				printf("%s\n", akt->ip->tcp->name);
 
-					//Porty
-					//Src Port
-					pom = 0;
-					printf("Zdrojovy port: ");
-					for (i = akt->ip->tcp->s_port; i < delimiter2; i++) {
-						if (i == akt->ip->tcp->s_port) {
-							pom = pktdata[i] * 256;
-						}
-						else
-						{
-							pom += pktdata[i];
-						}
+				//Porty
+				//Src Port
+				pom = 0;
+				printf("Zdrojovy port: ");
+				for (i = akt->ip->tcp->s_port; i < delimiter2; i++) {
+					if (i == akt->ip->tcp->s_port) {
+						pom = pktdata[i] * 256;
 					}
-					printf("%d\n", pom);
-					//Dst Port
-					printf("Cielovy port: ");
-					for (i = delimiter2; i < delimiter2 + 2; i++) {
-						if (i == akt->ip->tcp->d_port) {
-							pom = pktdata[i] * 256;
-						}
-						else
-						{
-							pom += pktdata[i];
-						}
+					else
+					{
+						pom += pktdata[i];
 					}
-					printf("%d\n", pom);
-
-					//Vypis Bytov(packetu)
-					for (i = 1; i <= header->caplen; i++) {
-
-						printf("%.2x ", pktdata[i - 1]);
-
-						if (i % LINE_LEN == 8) {
-							printf("  ");
-						}
-						else if (i % LINE_LEN == 0) {
-							printf("\n");
-						}
+				}
+				printf("%d\n", pom);
+				//Dst Port
+				printf("Cielovy port: ");
+				for (i = delimiter2; i < delimiter2 + 2; i++) {
+					if (i == akt->ip->tcp->d_port) {
+						pom = pktdata[i] * 256;
 					}
-					putchar('\n');
-					putchar('\n');
+					else
+					{
+						pom += pktdata[i];
+					}
+				}
+				printf("%d\n", pom);
+
+				//Vypis Bytov(packetu)
+				for (i = 1; i <= header->caplen; i++) {
+
+					printf("%.2x ", pktdata[i - 1]);
+
+					if (i % LINE_LEN == 8) {
+						printf("  ");
+					}
+					else if (i % LINE_LEN == 0) {
+						printf("\n");
+					}
+				}
+				putchar('\n');
+				putchar('\n');
+			}
+			else if(arr[n-k+1] == tmp && k>1 )
+			{
+				k--;
+				printf("Ramec: %d\n", tmp);
+				printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
+				printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
+				printf("%s\n", akt->name);
+
+				//MAC adresy
+				printf("Zdrojova MAC adresa: ");
+				for (i = akt->dest; i < akt->dest + akt->src; i++) {
+					if (i == 11) {
+						printf("%.2x\n", pktdata[i]);
+						break;
+					}
+					printf("%.2x ", pktdata[i]);
+				}
+
+				printf("Cielova MAC adresa: ");
+				for (i = 0; i < akt->dest; i++) {
+					if (i == 5) {
+						printf("%.2x\n", pktdata[i]);
+						break;
+					}
+					printf("%.2x ", pktdata[i]);
+				}
+
+				//IPv4
+				printf("%s\n", akt->ip->name);
+				//Src IP
+				printf("Zdrojova IP adresa: ");
+				for (i = akt->ip->s_ip; i < delimiter; i++) {
+					if (i == delimiter - 1) {
+						printf("%d\n", pktdata[i]);
+						break;
+					}
+					printf("%d. ", pktdata[i]);
+				}
+				//Dst IP
+				printf("Cielova IP adresa: ");
+				for (i = delimiter; i < delimiter + akt->ip->len; i++) {
+					if (i == (delimiter + akt->ip->len - 1)) {
+						printf("%d\n", pktdata[i]);
+						break;
+					}
+					printf("%d. ", pktdata[i]);
+				}
+
+				//TCP name
+				printf("%s\n", akt->ip->tcp->name);
+
+				//Porty
+				//Src Port
+				pom = 0;
+				printf("Zdrojovy port: ");
+				for (i = akt->ip->tcp->s_port; i < delimiter2; i++) {
+					if (i == akt->ip->tcp->s_port) {
+						pom = pktdata[i] * 256;
+					}
+					else
+					{
+						pom += pktdata[i];
+					}
+				}
+				printf("%d\n", pom);
+				//Dst Port
+				printf("Cielovy port: ");
+				for (i = delimiter2; i < delimiter2 + 2; i++) {
+					if (i == akt->ip->tcp->d_port) {
+						pom = pktdata[i] * 256;
+					}
+					else
+					{
+						pom += pktdata[i];
+					}
+				}
+				printf("%d\n", pom);
+
+				//Vypis Bytov(packetu)
+				for (i = 1; i <= header->caplen; i++) {
+
+					printf("%.2x ", pktdata[i - 1]);
+
+					if (i % LINE_LEN == 8) {
+						printf("  ");
+					}
+					else if (i % LINE_LEN == 0) {
+						printf("\n");
+					}
+				}
+				putchar('\n');
+				putchar('\n');
+				
+			}
+		}
+	}
+	else
+	{
+
+		//Prechadzanie paketmi a urËenie protokolu
+		while ((pcap_next_ex(f, &header, &pktdata)) > 0) {
+
+			tmp++;																				//»Ìslo r·mca
+			//Zistenie Ëi sa jedn· o IPv4 (0800) && IPv4
+			if (akt->arr[1] == (pktdata[position] * 100 + pktdata[position + 1]) && pktdata[akt->ip->name_p] / 10 == 6) {
+
+				//Protokol  sa nach·dza na na relaËnej vrtsve podprotokolu - TCP(06)
+				if (pktdata[prot_pos] == akt->ip->tcp->tcp_value) {
+
+					//Hodnoty cieloveho portu
+					if ((pktdata[akt->ip->tcp->d_port + 1] + pktdata[akt->ip->tcp->d_port] * 256) == prot_val ||
+						(pktdata[akt->ip->tcp->s_port + 1] + pktdata[akt->ip->tcp->s_port] * 256) == prot_val) {
+						printf("Ramec: %d\n", tmp);
+						printf("Dlzka ramca poskytnuta pcap API: %d\n", header->caplen);
+						printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 60 ? 64 : header->len + 4);
+						printf("%s\n", akt->name);
+
+						//MAC adresy
+						printf("Zdrojova MAC adresa: ");
+						for (i = akt->dest; i < akt->dest + akt->src; i++) {
+							if (i == 11) {
+								printf("%.2x\n", pktdata[i]);
+								break;
+							}
+							printf("%.2x ", pktdata[i]);
+						}
+
+						printf("Cielova MAC adresa: ");
+						for (i = 0; i < akt->dest; i++) {
+							if (i == 5) {
+								printf("%.2x\n", pktdata[i]);
+								break;
+							}
+							printf("%.2x ", pktdata[i]);
+						}
+
+						//IPv4
+						printf("%s\n", akt->ip->name);
+						//Src IP
+						printf("Zdrojova IP adresa: ");
+						for (i = akt->ip->s_ip; i < delimiter; i++) {
+							if (i == delimiter - 1) {
+								printf("%d\n", pktdata[i]);
+								break;
+							}
+							printf("%d. ", pktdata[i]);
+						}
+						//Dst IP
+						printf("Cielova IP adresa: ");
+						for (i = delimiter; i < delimiter + akt->ip->len; i++) {
+							if (i == (delimiter + akt->ip->len - 1)) {
+								printf("%d\n", pktdata[i]);
+								break;
+							}
+							printf("%d. ", pktdata[i]);
+						}
+
+						//TCP name
+						printf("%s\n", akt->ip->tcp->name);
+
+						//Porty
+						//Src Port
+						pom = 0;
+						printf("Zdrojovy port: ");
+						for (i = akt->ip->tcp->s_port; i < delimiter2; i++) {
+							if (i == akt->ip->tcp->s_port) {
+								pom = pktdata[i] * 256;
+							}
+							else
+							{
+								pom += pktdata[i];
+							}
+						}
+						printf("%d\n", pom);
+						//Dst Port
+						printf("Cielovy port: ");
+						for (i = delimiter2; i < delimiter2 + 2; i++) {
+							if (i == akt->ip->tcp->d_port) {
+								pom = pktdata[i] * 256;
+							}
+							else
+							{
+								pom += pktdata[i];
+							}
+						}
+						printf("%d\n", pom);
+
+						//Vypis Bytov(packetu)
+						for (i = 1; i <= header->caplen; i++) {
+
+							printf("%.2x ", pktdata[i - 1]);
+
+							if (i % LINE_LEN == 8) {
+								printf("  ");
+							}
+							else if (i % LINE_LEN == 0) {
+								printf("\n");
+							}
+						}
+						putchar('\n');
+						putchar('\n');
+					}
 				}
 			}
 		}
 	}
+	free(arr);	//uvolnenie poæa
 }
 
 
@@ -1100,7 +1319,7 @@ void Intro() {
 	printf("g: Vypis pre TFTP komunikaciu\n");
 	printf("h: Vypis pre ICMP komunikaciu\n");
 	printf("i: Vypis pre ARP komunikaciu\n");
-	printf("j: Vypis pre DNS komunik·ciu UDP\n");
+	printf("j: Vypis pre DNS komunikaciu UDP\n");
 	printf("k: Koniec programu\n");
 }
 
@@ -1286,7 +1505,7 @@ int main(void) {
 		char s[64];
 
 	
-		//printf("Dnes: ");
+		printf("Vitajte: ");
 		strftime(s, sizeof(s), "%c", tm);
 		printf("%s\n\n", s);
 		tm = NULL;
@@ -1300,26 +1519,26 @@ int main(void) {
 
 			switch (c) {
 				//Bod c. 1
-			case '1':Point_1(f, header, pktdata, &count, first),								//Oöetriù len pre ipv4 pozor na IIEE 802.3 len pre Ethernet II, porobiù bod a do f cez jednu funkciu
+			case '1':Point_1(f, header, pktdata, &count, first),										//Oöetriù len pre ipv4 pozor na IIEE 802.3 len pre Ethernet II, porobiù bod a do f cez jednu funkciu
 				pcap_close(f),
 				(f = (pcap_open_offline(path, errbuff))),
 				Vypis_ip(f, first, header, pktdata, count, path);
 				break;
 
 			//Bod c. 3 
-			case 'a':Print_Protocol(f, header, pktdata, count, first,"http"); break;				//V˝pis pre HTTP
-			case 'b':Print_Protocol(f, header, pktdata, count, first,"https"); break;				//V˝pis pre HTTPS
-			case 'c':Print_Protocol(f, header, pktdata, count, first,"telnet"); break;				//V˝pis pre TELNET
-			case 'd':Print_Protocol(f, header, pktdata, count, first,"ssh"); break;					//V˝pis pre SSH
-			case 'e':Print_Protocol(f, header, pktdata, count, first,"ftpc"); break;				//V˝pis pre FTP-Control
-			case 'f':Print_Protocol(f, header, pktdata, count, first,"ftpd"); break;				//V˝pis pre FTP-Data
-			case 'g':Vypis_TFTP(f, header, pktdata, first); break;									//V˝pis pre TFTP
-			case 'h':Vypis_ICMP(f, header, pktdata, first); break;									//V˝pis pre ICMP
-			case 'i':Vypis_Arp(f, header, pktdata, count, first, path); break;						//V˝pis pre ARP 
-			case 'j':Dns_udp(f, header, pktdata, first); break;										//V˝pis DND pre UDP
+			case 'a':Print_Protocol(f, header, pktdata, count, first,"http",path); break;				//V˝pis pre HTTP
+			case 'b':Print_Protocol(f, header, pktdata, count, first,"https",path); break;				//V˝pis pre HTTPS
+			case 'c':Print_Protocol(f, header, pktdata, count, first,"telnet",path); break;				//V˝pis pre TELNET
+			case 'd':Print_Protocol(f, header, pktdata, count, first,"ssh",path); break;				//V˝pis pre SSH
+			case 'e':Print_Protocol(f, header, pktdata, count, first,"ftpc",path); break;				//V˝pis pre FTP-Control
+			case 'f':Print_Protocol(f, header, pktdata, count, first,"ftpd",path); break;				//V˝pis pre FTP-Data
+			case 'g':Vypis_TFTP(f, header, pktdata, first); break;										//V˝pis pre TFTP
+			case 'h':Vypis_ICMP(f, header, pktdata, first); break;										//V˝pis pre ICMP
+			case 'i':Vypis_Arp(f, header, pktdata, count, first, path); break;							//V˝pis pre ARP 
+			case 'j':Dns_udp(f, header, pktdata, first); break;											//V˝pis DND pre UDP
 
 			}
-			f = (pcap_open_offline(path, errbuff));												//Rewind pcap_t *f
+			f = (pcap_open_offline(path, errbuff));														//Rewind pcap_t *f
 
 		}
 
