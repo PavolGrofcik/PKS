@@ -351,66 +351,80 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 	int i, j = 0, max = 0, delimiter;
 	char errbuff[20];
 	int count = 0, frame, tmp = 0;
+	int arr_count = 0, pom = 0;
 
 	int **arr = NULL;
 	int *space = NULL;
 
 	//Hranica (src) IP adrey 
 	delimiter = akt->ip->s_ip + 4;
-
+	//Poèet IPv4 protokolov v súbore
+	while (pcap_next_ex(f, &hdr, &pkt_data) > 0) {
+		count++;
+		if ((pkt_data[akt->src + akt->dest] * 256 + pkt_data[akt->src + akt->dest + 1])
+			== 2048) {
+			arr_count++;
+		}
+	}
+	f = pcap_open_offline(path, errbuff);
 	//Alokácia 2D po¾a na urèenie max ve¾kosti bajtov
-	if ((arr = (int**)malloc(n * sizeof(int*))) == NULL) {
+	if ((arr = (int**)malloc(arr_count * sizeof(int*))) == NULL) {
 		printf("Nedostatok pamate\n");
 		return;
 	}
 
-	for (i = 0; i < 30; i++) {
-		space = (int *)calloc(ARRAY_LEN*n, sizeof(int));
-	}
-
+	//alokácia pomocného po¾a
+	space = (int *)calloc(ARRAY_LEN*arr_count, sizeof(int));
+	
 	//Nasmerovanie po¾a smernikov žvonzíkov
-	for (i = 0; i < n; ++i) {
+	for (i = 0; i < arr_count; ++i) {
 		arr[i] = space + i*ARRAY_LEN;
 	}
 
+
+	count = 0;
 	printf("IP adresy vysielajucich uzlov:\n");
 	//Len Src Ip adresy
-	while ((pcap_next_ex(f, &hdr, &pkt_data)) >= 0) {
+	while ((pcap_next_ex(f, &hdr, &pkt_data)) > 0) {
 
 		count++;
 		//Len pre Ethernet II(0800)
-
-		for (i = akt->ip->s_ip; i < delimiter; i++) {
-			if (i == (delimiter - 1)) {
+		if ((pkt_data[akt->src + akt->dest] * 256 + pkt_data[akt->src + akt->dest + 1])
+			== 2048) {
+			//Poèet odvysielaných bajtov src adresa
+			for (i = akt->ip->s_ip; i < delimiter; i++) {
+				if (i == (delimiter - 1)) {
+					tmp += pkt_data[i];
+					//arr[j] = tmp;
+					printf("%d\n", pkt_data[i]);
+					break;
+				}
 				tmp += pkt_data[i];
-				//arr[j] = tmp;
-				printf("%d\n", pkt_data[i]);
-				break;
+				printf("%d. ", pkt_data[i]);
 			}
-			tmp += pkt_data[i];
-			printf("%d. ", pkt_data[i]);
+
+			//Priradenie IP s velkostou
+			arr[pom][0] = tmp;			//IP adresa
+			arr[pom][1] = hdr->caplen;	//Hodnota po mediu(Bajty)
+
+			pom++;
+			tmp = 0;
 		}
-
-		//Priradenie IP s velkostou
-		arr[count - 1][0] = tmp;			//IP adresa
-		arr[count - 1][1] = hdr->caplen;	//Hodnota po mediu(Bajty)
-
-		tmp = 0;
 	}
 
 
 	frame = arr[0][0];						//Default IP adresa
 	delimiter = arr[0][1];					//Default hodnota bajtov
-	for (i = 1; i < n; i++) {
+	for (i = 1; i < arr_count; i++) {
 		if (arr[i][0] == frame) {			//def ip
 			delimiter += arr[i][1];			//def max
 		}
 	}
 
-	for (i = 1; i < n; i++) {
+	for (i = 1; i < arr_count; i++) {
 		max = arr[i][1];
 		tmp = arr[i][0];
-		for (j = i + 1; j < n; j++) {
+		for (j = i + 1; j < arr_count; j++) {
 			if (arr[j][0] == tmp) {
 				max += arr[j][1];
 			}
@@ -434,7 +448,7 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 	printf("Adresa uzla s najvacsim poctom odvysielanych bajtov:\n");
 
 	//Cyklíme na zistenie IP adresy pre daný velkost
-	while ((pcap_next_ex(f, &hdr, &pkt_data)) >= 0) {
+	while ((pcap_next_ex(f, &hdr, &pkt_data)) > 0) {
 
 
 		for (i = akt->ip->s_ip; i < max; i++) {
@@ -457,13 +471,13 @@ void Vypis_ip(pcap_t *f, Protocol *first, struct pcap_pkthdr *hdr, const u_char 
 	}
 	//Dealokacia - vrátenie "požièaných" bajtov OS
 
-	for (i = 0; i < n; i++) {
+	for (i = 0; i < arr_count; i++) {
 		arr[i] = NULL;
 	}
 	free(space);
 	free(arr);
 	arr = NULL;
-
+	space = NULL;
 }
 
 void vypis(Protocol *first, struct pcap_pkthdr *header, const u_char *pktdata, int frame) {
