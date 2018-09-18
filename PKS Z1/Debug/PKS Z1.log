@@ -1,0 +1,6 @@
+﻿  Source.c
+c:\users\grofc\onedrive\dokumenty\visual studio 2017\projects\pks z1\pks z1\source.c(84): warning C4101: 'errbuff': unreferenced local variable
+c:\users\grofc\onedrive\dokumenty\visual studio 2017\projects\pks z1\pks z1\source.c(112): warning C4018: '<': signed/unsigned mismatch
+c:\users\grofc\onedrive\dokumenty\visual studio 2017\projects\pks z1\pks z1\source.c(124): warning C4018: '<': signed/unsigned mismatch
+c:\users\grofc\onedrive\dokumenty\visual studio 2017\projects\pks z1\pks z1\source.c(261): warning C4090: 'function': different 'const' qualifiers
+  PKS Z1.vcxproj -> C:\Users\grofc\OneDrive\Dokumenty\Visual Studio 2017\Projects\PKS Z1\Debug\PKS Z1.exe
