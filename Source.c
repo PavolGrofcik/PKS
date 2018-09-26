@@ -1,4 +1,4 @@
-/*	Zadanie		PKS 1
+/*	Zadanie		PKS 1	Network Analyzer
 *	Autor		Pavol GrofËÌk
 *	D·tum		13.9.2018
 */
@@ -10,23 +10,22 @@
 #include <pcap.h>
 
 
-
-#define FILENAME	"eth-8.pcap"			//N·zov analyzovanÈho pcap s˙boru
+#define FILENAME	"trace-16.pcap"			//N·zov analyzovanÈho pcap s˙boru
 #define FILEOUTPUT	"data.txt"				//N·zov v˝stupnÈho s˙boru
-#define PROTOCOLS	"protocols.txt"			//N·zov zdrojovÈho s˙boru pre pozÌcie MAC,IP,Ports ... 
+#define PROTOCOLS	"protocols.txt"			//N·zov zdrojovÈho s˙boru pre protokoly
 
 #define NAME_LEN	25						//Max dÂûka pre n·zov protokolov
 #define BUFF		512						//Max dÂûka pre buffer
 #define IP4_LEN		4						//DÂûka IPv4 adresy u_char
-#define PORT_LEN	2						//Dlûka portu v bytoch
-#define ARP_DEL		10						//Delimiter pre prv˝ch a posledn˝ch 10 komunik·cii ARP
-#define HASH_SIZE	10000					//Veækosù hash tabuæky
+#define PORT_LEN	2						//Dlûka portov v bytoch
+#define HASH_SIZE	10000					//Veækosù hash tabuæky na v˝pis IP 
 
 
 FILE *fw = NULL;							//Glob·ln˝ pointer pre z·pis v˝stupu do s˙boru
 FILE *fr = NULL;							//-||- pointer na ËÌtanie protocols.txt s˙boru
 pcap_t *fpc = NULL;							//-||- pointer na ËÌtanie .pcap s˙boru
-int Mode;									//MÛd pre v˝stup programu
+
+int Mode;									//MÛd pre v˝stup programu	1 File 0 STDOUT
 
 
 //Pomocn· ötrukt˙ra pre v˝pis IP adries
@@ -41,6 +40,7 @@ typedef struct pairs {
 	char name[NAME_LEN];		//N·zov
 }Pairs;
 
+//ätrukt˙ra pre ARP
 typedef struct arp {
 	char name[NAME_LEN];		//N·zov
 	int positions[3];			//PozÌcie protokolov pre ARP
@@ -48,22 +48,25 @@ typedef struct arp {
 	Pairs opcode[2];			//Typ ARP operaËnÈho kÛdu
 }Arp;
 
+//ätrukt˙ra pre Linkov˙ vrstvu
 typedef struct datalink {
-	char eth[NAME_LEN];
-	char iee[NAME_LEN];
+	char eth[NAME_LEN];			//Ethernet II
+	char iee[NAME_LEN];			//IEEE-802.3
 
 	int positions[3];			//PozÌcie MAC adresy,type/len
 	int boundary;				//Hranica pre ETH II (0600 DEC)
 	Pairs pairs[4];				//Hodnota:par e.g 0800 IPv4
 }DataLink;
 
+//ätrukt˙ra pre sieùov˙ vrstvu
 typedef struct ip {
-	char name[NAME_LEN];		//N·zov
+	char name[NAME_LEN];		//IPv4
 
 	int positions[4];			//PozÌcia IHL,Protocol, Src, Dst IP
 	Pairs pairs[3];				//Protocoly a hodnoty
 }Ip;
 
+//ätrukt˙ra pre transportn˙ vrstvu
 typedef struct tcp {
 	char name[NAME_LEN];		//TCP
 
@@ -71,18 +74,20 @@ typedef struct tcp {
 	Pairs pairs[7];				//P·r port + n·zov
 }Tcp;
 
+//ätrukt˙ra pre transportn˙ vrstvu
 typedef struct upd {
 	char name[NAME_LEN];		//ICMP
 
 	int positions[2];			//PozÌcia Type/Code
-	Pairs pairs[3];
+	Pairs pairs[3];				//P·r port + n·zov
 }Udp;
 
+//ätrukt˙ra pre transportn˙ vrstvu ICMP
 typedef struct icmp {
 	char name[NAME_LEN];		//ICMP
 
 	int positions[2];			//PozÌcia Type/Code
-	Pairs pairs[6];
+	Pairs pairs[6];				//P·r port + n·zov
 }Icmp;
 
 
@@ -100,13 +105,13 @@ void read_protocols(FILE **fr, DataLink *link, Arp *arp, Ip *ip, Tcp *tcp, Icmp 
 		
 	}
 
+	//»Ìtanie protokolov
 	while (!feof(*fr)) {
 
 		if ((c = getc(*fr)) == '#') {
 			fgets(buff, BUFF, *fr);
 		}
 		else {
-
 			ungetc(c, *fr);
 			fgets(link->eth, 13, *fr);
 			fgets(link->iee, 12, *fr);
@@ -122,7 +127,6 @@ void read_protocols(FILE **fr, DataLink *link, Arp *arp, Ip *ip, Tcp *tcp, Icmp 
 				fscanf(*fr, "%s", link->pairs[i].name);
 			}
 
-			//Prerobiù na f-ciu
 			getc(*fr);
 			if ((c = getc(*fr)) == '#') {
 				fgets(buff, BUFF, *fr);
@@ -216,6 +220,10 @@ void read_protocols(FILE **fr, DataLink *link, Arp *arp, Ip *ip, Tcp *tcp, Icmp 
 int init(DataLink **link, Arp **arp, Ip **ip, Tcp **tcp, Icmp **icmp, Udp **udp) {
 	char errbuff[BUFF];
 
+	//⁄vodnÈ okno
+	printf("^^^^^^^^^^^########################^^^^^^^^^^^\n");
+	printf("\t Vitaje v Network Analyser\n");
+	printf("^^^^^^^^^^^########################^^^^^^^^^^^\n");
 	printf("Zadajte mod  pre vystup\n");
 	printf("0 - Konzola\n1 - Subor\n");
 	scanf("%d", &Mode);
@@ -227,14 +235,16 @@ int init(DataLink **link, Arp **arp, Ip **ip, Tcp **tcp, Icmp **icmp, Udp **udp)
 		}
 	}
 
-	*link = (DataLink*)malloc(sizeof(DataLink));		//Alokovanie pam‰te pre ötrukt˙ru DataLink
-	*arp = (Arp*)malloc(sizeof(Arp));					//Alokovanie pam‰te pre -||- Arp
+	//Alok·cia protokolov
+	*link = (DataLink*)malloc(sizeof(DataLink));		
+	*arp = (Arp*)malloc(sizeof(Arp));					
 	*ip = (Ip*)malloc(sizeof(Ip));
 	*tcp = (Tcp*)malloc(sizeof(Tcp));
 	*icmp = (Icmp*)malloc(sizeof(Icmp));
 	*udp = (Udp*)malloc(sizeof(Udp));
 
-	read_protocols(&fr, *link, *arp, *ip, *tcp,  *icmp, *udp);					//NaËÌtanie protokolov zo s˙boru PROTOCOLS
+	//NaËÌtanie protokolov zo s˙boru PROTOCOLS
+	read_protocols(&fr, *link, *arp, *ip, *tcp,  *icmp, *udp);					
 	
 	return 1;
 }
@@ -262,11 +272,13 @@ int filename_open() {
 	}
 
 //Funkcia uvoænÌ alokovan˙ pam‰ù
-void dealloc(DataLink *link, Arp *arp, Ip *ip, Tcp *tcp) {
+void dealloc(DataLink *link, Arp *arp, Ip *ip, Tcp *tcp, Icmp *icmp, Udp *udp) {
 	free(link);
 	free(arp);
 	free(ip);
 	free(tcp);
+	free(icmp);
+	free(udp);
 }
 
 //Funkcia vypÌöe Ë.ramca buÔ na stdin/stdout
@@ -315,7 +327,7 @@ void print_pkt_data(u_char *pktdata, struct pcap_pkthdr *header) {
 void print_datalink(struct pcap_pkthdr *header, u_char *pktdata, DataLink *link) {
 
 	if (Mode) {
-		fprintf(fw, "Dlzka ramca poskytnuteho pcap API: %d\n", header->len);								//Header-> len == caplen rovnakÈ
+		fprintf(fw, "Dlzka ramca poskytnuteho pcap API: %d\n", header->len);								//Header-> len == caplen
 		fprintf(fw, "Dlzka ramca prenasaneho po mediu: %d\n", header->len < 64 ? 64 : header->len + 4);		//FCS + 4B
 		int protocol = (pktdata[link->positions[1]] << 8) + pktdata[link->positions[1] + 1];
 
@@ -354,7 +366,7 @@ void print_datalink(struct pcap_pkthdr *header, u_char *pktdata, DataLink *link)
 	}
 	else {
 
-		printf("Dlzka ramca poskytnuteho pcap API: %d\n", header->len);								//Header-> len == caplen rovnakÈ
+		printf("Dlzka ramca poskytnuteho pcap API: %d\n", header->len);								//Header-> len == caplen 
 		printf("Dlzka ramca prenasaneho po mediu: %d\n", header->len < 64 ? 64 : header->len + 4);	//FCS + 4B
 		int protocol = (pktdata[link->positions[1]] << 8) + pktdata[link->positions[1] + 1];
 
@@ -576,6 +588,7 @@ void print_ip_addresses(struct pcap_pkthdr *header, u_char *pktdata, DataLink *l
 
 			//Naplnenie poæa Ip adries
 			position = hash % HASH_SIZE;
+			
 
 			j = 0;
 			for (int i = ip->positions[2]; i < ip->positions[3]; i++) {
@@ -1291,8 +1304,7 @@ void analyse_udp(struct pcap_pkthdr *header, u_char *pktdata, DataLink *link, Ip
 	free(arr);
 }
 
-
-
+//Funkcia pre moûnosù analyzy protokolov
 void User_interface() {
 
 	printf("\nZadajte operaciu: \n");
@@ -1310,8 +1322,13 @@ void User_interface() {
 	printf("k: Koniec programu\n");
 }
 
+
+
+
+
 int main(void) {
 
+	//Protokoly
 	DataLink *link = NULL;			
 	Arp *arp = NULL;
 	Ip	*ip = NULL;
@@ -1319,11 +1336,12 @@ int main(void) {
 	Icmp *icmp = NULL;
 	Udp *udp = NULL;
 
+	//Pcap 
 	const u_char *pktdata = NULL;
 	struct pcap_pkthdr* header = NULL;
 	char c;
 
-	//Inicializ·cia d·tov˝ch ötrukt˙r
+	//Inicializ·cia protokolov
 	if (init(&link, &arp, &ip, &tcp, &icmp, &udp) < 1) {
 		printf("Inicializacia neuspesna\n");
 		return -1;
@@ -1332,6 +1350,8 @@ int main(void) {
 	User_interface();
 	getc(stdin);	
 
+
+	/*ZobrazÌ menu na analyzu protokolov*/
 	while ((c = getc(stdin))!= 'k') {
 		if (c == '1') print_communications(header, pktdata, link, ip);
 		else if (c == 'a') analyse_tcp(header, pktdata, link, ip, tcp, "http");
@@ -1353,7 +1373,8 @@ int main(void) {
 		getc(stdin);
 	}
 
-	dealloc(link,arp,ip,tcp,icmp,udp);
+	//Uvoænenie prostriedkov
+	dealloc(link, arp, ip, tcp, icmp, udp);
 	
 	if (fpc != NULL) {
 		pcap_close(fpc);
