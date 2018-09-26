@@ -1,4 +1,4 @@
-#This symbol # is for comment indeed
+#This symbol # is for one line comment
 #Name of protocol, <0-6) Dst MAC, <6,12) Src MAC, <12,14) Type or Length <0600 = IEEE 802.3, 0800 IPv4, 0806 ARP
 Ethernet II IEEE 802.3 6 12 14 1536 2048 IPv4 2054 ARP 170	SNAP	255		Raw
 #Name , Src IP addres, Dst Ip addres, Position of opcode, opcode
@@ -7,3 +7,7 @@ ARP 28 38 21	1 request	2	reply
 IPv4 	14	23	26	30	1 ICMP	6 TCP	17	UDP
 #TCP, SRC Port, DST port, Port number + Name
 TCP	34	36	20	Ftp-data	21	Ftp-control	22	SSH	23	Telnet	80 Http 443	Https	53 Dns
+#ICMP	Type	Port 	Status + Name
+ICMP	34	35	0	Echo-Reply	3	Destination-Unreachable	4	Source-Quench	5	Redirect	8	Echo 10		Time-Exceeded
+#UDP	SRC Port,	DST Port,	Port number + Name
+Udp	34	36	7	Echo 	53	Dns	69	Tftp

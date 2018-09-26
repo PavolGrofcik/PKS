@@ -11,11 +11,11 @@
 
 
 
-#define FILENAME	"eth-4.pcap"			//Názov analyzovaného pcap súboru
+#define FILENAME	"eth-8.pcap"			//Názov analyzovaného pcap súboru
 #define FILEOUTPUT	"data.txt"				//Názov výstupného súboru
 #define PROTOCOLS	"protocols.txt"			//Názov zdrojového súboru pre pozície MAC,IP,Ports ... 
 
-#define NAME_LEN	16						//Max dåžka pre názov protokolov
+#define NAME_LEN	25						//Max dåžka pre názov protokolov
 #define BUFF		512						//Max dåžka pre buffer
 #define IP4_LEN		4						//Dåžka IPv4 adresy u_char
 #define PORT_LEN	2						//Dlžka portu v bytoch
@@ -71,8 +71,23 @@ typedef struct tcp {
 	Pairs pairs[7];				//Pár port + názov
 }Tcp;
 
+typedef struct upd {
+	char name[NAME_LEN];		//ICMP
+
+	int positions[2];			//Pozícia Type/Code
+	Pairs pairs[3];
+}Udp;
+
+typedef struct icmp {
+	char name[NAME_LEN];		//ICMP
+
+	int positions[2];			//Pozícia Type/Code
+	Pairs pairs[6];
+}Icmp;
+
+
 //Funkcia naèíta jednotlivé protokoly zo súboru
-void read_protocols(FILE **fr, DataLink *link, Arp *arp, Ip *ip, Tcp *tcp) {
+void read_protocols(FILE **fr, DataLink *link, Arp *arp, Ip *ip, Tcp *tcp, Icmp *icmp, Udp *udp) {
 
 	char buff[BUFF];
 	int c;
@@ -157,13 +172,48 @@ void read_protocols(FILE **fr, DataLink *link, Arp *arp, Ip *ip, Tcp *tcp) {
 				fscanf(*fr, "%d", &tcp->pairs[i].number);
 				fscanf(*fr, "%s", tcp->pairs[i].name);
 			}
+
+			//Naèítanie ICMP
+			getc(*fr);
+			if ((c = getc(*fr)) == '#') {
+				fgets(buff, BUFF, *fr);
+			}
+
+			fscanf(*fr, "%s", icmp->name);
+
+			for (int i = 0; i < 2; i++) {
+				fscanf(*fr, "%d", &icmp->positions[i]);
+			}
+
+			for (int i = 0; i < 6; i++) {
+				fscanf(*fr, "%d", &icmp->pairs[i].number);
+				fscanf(*fr, "%s", icmp->pairs[i].name);
+			}
+
+			//Naèítanie UDP
+			getc(*fr);
+			if ((c = getc(*fr)) == '#') {
+				fgets(buff, BUFF, *fr);
+			}
+
+			fscanf(*fr, "%s", udp->name);
+
+			for (int i = 0; i < 2; i++) {
+				fscanf(*fr, "%d", &udp->positions[i]);
+			}
+
+			for (int i = 0; i < 3; i++) {
+				fscanf(*fr, "%d", &udp->pairs[i].number);
+				fscanf(*fr, "%s", udp->pairs[i].name);
+			}
+
 			break;
 		}
 	}
 }
 
 //Funkcia inicializuje potrebné dáta na analyzovanie vzoriek
-int init(DataLink **link, Arp **arp, Ip **ip, Tcp **tcp) {
+int init(DataLink **link, Arp **arp, Ip **ip, Tcp **tcp, Icmp **icmp, Udp **udp) {
 	char errbuff[BUFF];
 
 	printf("Zadajte mod  pre vystup\n");
@@ -181,8 +231,10 @@ int init(DataLink **link, Arp **arp, Ip **ip, Tcp **tcp) {
 	*arp = (Arp*)malloc(sizeof(Arp));					//Alokovanie pamäte pre -||- Arp
 	*ip = (Ip*)malloc(sizeof(Ip));
 	*tcp = (Tcp*)malloc(sizeof(Tcp));
+	*icmp = (Icmp*)malloc(sizeof(Icmp));
+	*udp = (Udp*)malloc(sizeof(Udp));
 
-	read_protocols(&fr, *link, *arp, *ip, *tcp);					//Naèítanie protokolov zo súboru PROTOCOLS
+	read_protocols(&fr, *link, *arp, *ip, *tcp,  *icmp, *udp);					//Naèítanie protokolov zo súboru PROTOCOLS
 	
 	return 1;
 }
@@ -216,6 +268,7 @@ void dealloc(DataLink *link, Arp *arp, Ip *ip, Tcp *tcp) {
 	free(ip);
 	free(tcp);
 }
+
 //Funkcia vypíše è.ramca buï na stdin/stdout
 void print_frame_number(int frame) {
 	if (Mode) {
@@ -409,7 +462,7 @@ void print_address(u_char *pktdata, Ip *ip, int flag) {
 			//DST IP
 			for (int i = ip->positions[3]; i < ip->positions[3] + IP4_LEN; i++) {
 				if (i == (ip->positions[3] + 3)) {
-					fprintf(fw, "%d", pktdata[i]);
+					fprintf(fw, "%d\n", pktdata[i]);
 				}
 				else {
 					fprintf(fw, "%d.", pktdata[i]);
@@ -433,7 +486,7 @@ void print_address(u_char *pktdata, Ip *ip, int flag) {
 			//DST IP
 			for (int i = ip->positions[3]; i < ip->positions[3] + IP4_LEN; i++) {
 				if (i == (ip->positions[3] + 3)) {
-					printf("%d", pktdata[i]);
+					printf("%d\n", pktdata[i]);
 				}
 				else {
 					printf("%d.", pktdata[i]);
@@ -678,27 +731,107 @@ void print_arp_info(struct pcap_pkthdr *header, u_char *pktdata, DataLink *link,
 	}
 }
 
-//Funkcia k výpisu tcp komunikácií
-void print_tcp_info(struct pcap_pkthdr *header, u_char *pktdata, Ip *ip, Tcp *tcp) {
+//Funkcia k výpisu tcp/icmp komunikácií
+void print_tcp_icmp_info(struct pcap_pkthdr *header, u_char *pktdata, Ip *ip, Tcp *tcp, Icmp *icmp, int icmp_flag) {
 	if (Mode) {
-		fprintf(fw,"%s\n", tcp->name);
+		fprintf(fw,"%s\n", ip->name);
 		fprintf(fw, "Zdrojova IP adresa: ");
 		print_address(pktdata, ip, 0);
-		fprintf(fw, "\nCielova IP adresa: ");
+		fprintf(fw, "Cielova IP adresa: ");
 		print_address(pktdata,ip,1);
-		fprintf(fw,"%s\n", ip->name);
-		fprintf(fw,"Zdrojovy port: %d\n", (pktdata[tcp->positions[0]] << 8) + pktdata[tcp->positions[0] + 1]);		//IHL???
-		fprintf(fw,"Cielovy port %d\n", (pktdata[tcp->positions[1]] << 8) + pktdata[tcp->positions[1] + 1]);
+		fprintf(fw, "%s\n", tcp->name);
+
+		int ihl = pktdata[ip->positions[0]] & 0xF;		//IHL pre IP je od 5(20) po F(60)
+		ihl = (ihl - 5) * 4;
+
+		if (icmp_flag == 1) {
+
+			int tmp = pktdata[icmp->positions[0] + ihl];
+			switch (tmp) {
+			case 0:fprintf(fw, "Type: %s\n", icmp->pairs[0].name); break;
+			case 3:fprintf(fw, "Type: %s\n", icmp->pairs[1].name); break;
+			case 4:fprintf(fw, "Type: %s\n", icmp->pairs[2].name); break;
+			case 5:fprintf(fw, "Type: %s\n", icmp->pairs[3].name); break;
+			case 8:fprintf(fw, "Type: %s\n", icmp->pairs[4].name); break;
+			case 10:fprintf(fw, "Type: %s\n", icmp->pairs[5].name); break;
+			}
+		}
+		else {
+
+			fprintf(fw, "Zdrojovy port: %d\n", (pktdata[tcp->positions[0] + ihl] << 8) + pktdata[tcp->positions[0] + ihl + 1]);
+			fprintf(fw, "Cielovy port %d\n", (pktdata[tcp->positions[1] + ihl] << 8) + pktdata[tcp->positions[1] + ihl + 1]);
+		}
 	}
 	else {
-		printf("%s\n", tcp->name);
+		printf("%s\n", ip->name);
 		printf("Zdrojova IP adresa: ");
 		print_address(pktdata, ip, 0);
 		printf("Cielova IP adresa: ");
 		print_address(pktdata, ip, 1);
+		printf("%s\n", tcp->name);
+
+		int ihl = pktdata[ip->positions[0]] & 0xF;		//IHL pre IP je od 5(20) po F(60)
+		ihl = (ihl - 5) * 4;
+		
+
+		if (icmp_flag == 1) {
+			int tmp = pktdata[icmp->positions[0] + ihl];
+			switch (tmp) {
+			case 0:printf("Type: %s\n", icmp->pairs[0].name); break;
+			case 3:printf("Type: %s\n", icmp->pairs[1].name); break;
+			case 4:printf("Type: %s\n", icmp->pairs[2].name); break;
+			case 5:printf("Type: %s\n", icmp->pairs[3].name); break;
+			case 8:printf("Type: %s\n", icmp->pairs[4].name); break;
+			case 10:printf("Type: %s\n", icmp->pairs[5].name); break;
+			}
+		}
+		else {
+
+			printf("Zdrojovy port: %d\n", (pktdata[tcp->positions[0] + ihl] << 8) + pktdata[tcp->positions[0] + ihl + 1]);		
+			printf("Cielovy port %d\n", (pktdata[tcp->positions[1] + ihl] << 8) + pktdata[tcp->positions[1] + ihl + 1]);
+		}
+	}
+}
+
+//Funkcia k výpisu udp komunikácii
+void print_udp_info(struct pcap_pkthdr *header, u_char *pktdata, Ip *ip, Udp *udp, int com_type) {
+	if (Mode) {
+		fprintf(fw, "%s\n", ip->name);
+		fprintf(fw, "Zdrojova IP adresa: ");
+		print_address(pktdata, ip, 0);
+		fprintf(fw, "Cielova IP adresa: ");
+		print_address(pktdata, ip, 1);
+		fprintf(fw, "%s\n", udp->name);
+
+		int ihl = pktdata[ip->positions[0]] & 0xF;		//IHL pre IP je od 5(20) po F(60)
+		ihl = (ihl - 5) * 4;
+		int prot = (pktdata[udp->positions[0] + ihl] << 8) + pktdata[udp->positions[0] + ihl + 1];		//Urèenie protokolu a jeho typu
+
+		fprintf(fw, "Zdrojovy port: %d\n", (pktdata[udp->positions[0] + ihl] << 8) + pktdata[udp->positions[0] + ihl + 1]);
+		fprintf(fw, "Cielovy port %d\n", (pktdata[udp->positions[1] + ihl] << 8) + pktdata[udp->positions[1] + ihl + 1]);
+
+		if(com_type == 2) fprintf(fw, "%s\n", udp->pairs[2].name);		//com_type 2 TFTP
+		else if (com_type == 1) fprintf(fw, "%s\n", udp->pairs[1].name);		//com_type 2 DNS
+
+	}
+	else {
 		printf("%s\n", ip->name);
-		printf("Zdrojovy port: %d\n",(pktdata[tcp->positions[0]] << 8) + pktdata[tcp->positions[0] + 1]);		//IHL???
-		printf("Cielovy port %d\n", (pktdata[tcp->positions[1]] << 8) + pktdata[tcp->positions[1] + 1]);
+		printf("Zdrojova IP adresa: ");
+		print_address(pktdata, ip, 0);
+		printf("Cielova IP adresa: ");
+		print_address(pktdata, ip, 1);
+		printf("%s\n", udp->name);
+
+		int ihl = pktdata[ip->positions[0]] & 0xF;		//IHL pre IP je od 5(20) po F(60)
+		ihl = (ihl - 5) * 4;
+
+		printf("Zdrojovy port: %d\n", (pktdata[udp->positions[0] + ihl] << 8) + pktdata[udp->positions[0] + ihl + 1]);
+		printf("Cielovy port %d\n", (pktdata[udp->positions[1] + ihl] << 8) + pktdata[udp->positions[1] + ihl + 1]);
+
+		int prot = (pktdata[udp->positions[0] + ihl] << 8) + pktdata[udp->positions[0] + ihl + 1];		//Urèenie protokolu a jeho typu
+		
+		if (com_type == 2) printf("%s\n", udp->pairs[2].name);		//com_type 2 TFTP
+		else if (com_type == 1) printf("%s\n", udp->pairs[1].name);		//com_type 2 DNS
 	}
 }
 
@@ -863,6 +996,7 @@ void analyse_arp(struct pcap_pkthdr *header, u_char *pktdata, DataLink *link, Ar
 	}
 }
 
+//Funkcia analyzuje TCP komunikácie
 void analyse_tcp(struct pcap_pkthdr *header, u_char *pktdata, DataLink *link, Ip *ip, Tcp *tcp, char *port_name) {
 
 	int communication, protocol, tcp_val, port, counter, n,i, tmp, tmp2;
@@ -930,9 +1064,11 @@ void analyse_tcp(struct pcap_pkthdr *header, u_char *pktdata, DataLink *link, Ip
 	else {
 		if (Mode) {
 			fprintf(fw,"Ziadne %s komunikacie\n", port_name);
+			return;
 		}
 		else {
 			printf("Ziadne %s komunikacie\n", port_name);
+			return;
 		}
 	}
 
@@ -945,13 +1081,13 @@ void analyse_tcp(struct pcap_pkthdr *header, u_char *pktdata, DataLink *link, Ip
 			if (i < 10) {
 				print_frame_number(counter);
 				print_datalink(header, pktdata, link);
-				print_tcp_info(header, pktdata, ip, tcp);
+				print_tcp_icmp_info(header, pktdata, ip, tcp,NULL,0);
 				print_pkt_data(pktdata, header);
 			}
 			else if( counter>= arr[n-10]){
 				print_frame_number(counter);
 				print_datalink(header, pktdata, link);
-				print_tcp_info(header, pktdata, ip, tcp);
+				print_tcp_icmp_info(header, pktdata, ip, tcp,NULL,0);
 				print_pkt_data(pktdata, header);
 			}
 			i++;
@@ -959,7 +1095,7 @@ void analyse_tcp(struct pcap_pkthdr *header, u_char *pktdata, DataLink *link, Ip
 		else if(arr[i]==counter && n <= 20) {
 			print_frame_number(counter);
 			print_datalink(header, pktdata, link);
-			print_tcp_info(header, pktdata, ip, tcp);
+			print_tcp_icmp_info(header, pktdata, ip, tcp,NULL,0);
 			print_pkt_data(pktdata, header);
 			i++;
 		}
@@ -970,6 +1106,192 @@ void analyse_tcp(struct pcap_pkthdr *header, u_char *pktdata, DataLink *link, Ip
 	}
 	free(arr);
 }
+
+//Funkcia analyzuje ICMP komunikácie
+void analyse_icmp(struct pcap_pkthdr *header, u_char *pktdata, DataLink *link, Ip *ip, Tcp *tcp, Icmp *icmp) {
+	int counter, protocol, communication, tmp, tmp2, i, n,
+		icmp_val;
+	int *arr = NULL;
+
+
+	filename_open();		//Rewind súboru
+
+	arr = (int*)malloc(sizeof(int));
+
+	i = n = counter = 0;
+	while (pcap_next_ex(fpc, &header, &pktdata) > 0) {
+		counter++;
+
+		protocol = (pktdata[link->positions[1]] << 8) + pktdata[link->positions[1] + 1];		
+
+		if (protocol == link->pairs[0].number) {			//IPv4 = 2048
+			icmp_val = pktdata[ip->positions[1]];			//ICMP = 6
+															//Urèíme hodnoty portov
+			//Urèi si type
+
+			if ((icmp_val == ip->pairs[0].number)) {
+				arr[i] = counter;
+				i++;
+				n++;
+				arr = realloc(arr, (n + 1) * sizeof(int));			//Zapamätanie si è.rámcov pre danú kom
+			}
+		}
+	}
+
+	//Pomocný výpis
+	if (n > 0) {
+		if (Mode) {
+			fprintf(fw, "Komunikacie %s\n", icmp->name);
+		}
+		else {
+			printf("Komunikacie %s\n", icmp->name);
+		}
+	}
+	else {
+		if (Mode) {
+			fprintf(fw, "Ziadne %s komunikacie\n", icmp->name);
+			return;
+		}
+		else {
+			printf("Ziadne %s komunikacie\n", icmp->name);
+			return;
+		}
+	}
+
+	filename_open();
+
+	//Výpis ICMP
+	i = counter = tmp = 0;
+	while (pcap_next_ex(fpc, &header, &pktdata) > 0) {
+		counter++;
+
+		if (n > 20 && arr[i] == counter) {
+			if (i < 10) {
+				print_frame_number(counter);
+				print_datalink(header, pktdata, link);
+				print_tcp_icmp_info(header, pktdata, ip, tcp, icmp, 1);
+				print_pkt_data(pktdata, header);
+			}
+			else if (counter >= arr[n - 10]) {
+				print_frame_number(counter);
+				print_datalink(header, pktdata, link);
+				print_tcp_icmp_info(header, pktdata, ip, tcp, icmp, 1);
+				print_pkt_data(pktdata, header);
+			}
+			i++;
+		}
+		else if (arr[i] == counter && n <= 20) {
+			print_frame_number(counter);
+			print_datalink(header, pktdata, link);
+			print_tcp_icmp_info(header, pktdata, ip, tcp, icmp, 1);
+			print_pkt_data(pktdata, header);
+			i++;
+		}
+
+		if (counter > arr[n - 1]) {
+			break;
+		}
+	}
+
+
+	free(arr);
+
+}
+
+//Funkcia analyzuje UDP komunikácie
+void analyse_udp(struct pcap_pkthdr *header, u_char *pktdata, DataLink *link, Ip *ip, Udp *udp, int com_type) {
+
+	int counter, protocol, tmp, i, n, udp_val;
+	int *arr = NULL;
+
+	filename_open();		//Rewind súboru
+	arr = (int*)malloc(sizeof(int));
+
+	counter = i = n = 0;
+	while (pcap_next_ex(fpc, &header, &pktdata) > 0) {
+		counter++;
+
+		protocol = (pktdata[link->positions[1]] << 8) + pktdata[link->positions[1] + 1];		//IPv4 = 2048
+
+		if (protocol == link->pairs[0].number) {
+			udp_val = pktdata[ip->positions[1]];			//UDP = 17(11)
+															//Urèíme hodnoty portov
+
+			int ihl = pktdata[ip->positions[0]] & 0xF;		//IHL pre IP je od 5(20) po F(60)
+			ihl = (ihl - 5) * 4;
+			int prot = (pktdata[udp->positions[0] + ihl] << 8) + pktdata[udp->positions[0] + ihl + 1];		//Urèenie protokolu a jeho typu
+			int prot2 = (pktdata[udp->positions[1] + ihl] << 8) + pktdata[udp->positions[1] + ihl + 1];
+
+			if (udp_val == ip->pairs[2].number && (prot == udp->pairs[com_type].number
+				|| prot2 == udp->pairs[com_type].number)) {					//com_type 2 TFTP	1 DNS
+				arr[i] = counter;
+				i++;
+				n++;
+				arr = realloc(arr, (n + 1) * sizeof(int));			//Zapamätanie si è.rámcov pre danú kom
+			}
+		}
+	}
+
+
+	//Pomocný výpis
+	if (n > 0) {
+		if (Mode) {
+			fprintf(fw, "Komunikacie %s\n", udp->name);
+		}
+		else {
+			printf("Komunikacie %s\n", udp->name);
+		}
+	}
+	else {
+		if (Mode) {
+			fprintf(fw, "Ziadne %s komunikacie\n", udp->name);
+			return;
+		}
+		else {
+			printf("Ziadne %s komunikacie\n", udp->name);
+			return;
+		}
+	}
+
+	filename_open();
+
+	//Výpis datagramov TFTP/DNS
+	i = counter = tmp = 0;
+	while (pcap_next_ex(fpc, &header, &pktdata) > 0) {
+		counter++;
+
+		if (n > 20 && arr[i] == counter) {
+			if (i < 10) {
+				print_frame_number(counter);
+				print_datalink(header, pktdata, link);
+				print_udp_info(header, pktdata, ip, udp, com_type);
+				print_pkt_data(pktdata, header);
+			}
+			else if (counter >= arr[n - 10]) {
+				print_frame_number(counter);
+				print_datalink(header, pktdata, link);
+				print_udp_info(header, pktdata, ip, udp, com_type);
+				print_pkt_data(pktdata, header);
+			}
+			i++;
+		}
+		else if (arr[i] == counter && n <= 20) {
+			print_frame_number(counter);
+			print_datalink(header, pktdata, link);
+			print_udp_info(header, pktdata, ip, udp, com_type);
+			print_pkt_data(pktdata, header);
+			i++;
+		}
+
+		if (counter > arr[n - 1]) {
+			break;
+		}
+	}
+
+	free(arr);
+}
+
+
 
 void User_interface() {
 
@@ -994,12 +1316,15 @@ int main(void) {
 	Arp *arp = NULL;
 	Ip	*ip = NULL;
 	Tcp *tcp = NULL;
+	Icmp *icmp = NULL;
+	Udp *udp = NULL;
 
 	const u_char *pktdata = NULL;
 	struct pcap_pkthdr* header = NULL;
 	char c;
 
-	if (init(&link, &arp, &ip, &tcp) < 1) {
+	//Inicializácia dátových štruktúr
+	if (init(&link, &arp, &ip, &tcp, &icmp, &udp) < 1) {
 		printf("Inicializacia neuspesna\n");
 		return -1;
 	}
@@ -1015,9 +1340,9 @@ int main(void) {
 		else if (c == 'd') analyse_tcp(header, pktdata, link, ip, tcp, "ssh");
 		else if (c == 'e') analyse_tcp(header, pktdata, link, ip, tcp, "ftp-control");
 		else if (c == 'f') analyse_tcp(header, pktdata, link, ip, tcp, "ftp-data");
-		else if (c == 'g') printf("TFTP\n");
-		else if (c == 'h') printf("ICMP\n");
-		else if (c == 'i') printf("DNS\n");								//Len pre UDP
+		else if (c == 'g') analyse_udp(header, pktdata, link, ip, udp, 2);
+		else if (c == 'h') analyse_icmp(header, pktdata, link, ip, tcp, icmp);
+		else if (c == 'i') analyse_udp(header, pktdata, link, ip, udp, 1);
 		else if (c == 'j') analyse_arp(header, pktdata, link, arp);
 		else if (c == 'k' || c == 'K') break;
 
@@ -1028,7 +1353,7 @@ int main(void) {
 		getc(stdin);
 	}
 
-	dealloc(link,arp,ip, tcp);
+	dealloc(link,arp,ip,tcp,icmp,udp);
 	
 	if (fpc != NULL) {
 		pcap_close(fpc);
