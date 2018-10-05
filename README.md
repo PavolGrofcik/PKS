@@ -31,3 +31,6 @@ Ak počet rámcov danej komunikácie je väčší ako 20, vypíšte iba 10 prvý
 4) Program musí byť organizovaný tak, aby čísla protokolov v rámci Ethernet II a v IP pakete ako aj čísla portov v transportných protokoloch boli programom určené z externého súboru a pre známe protokoly a porty boli uvedené aj ich názvy.
 5) V procese analýzy rámcov pri identifikovaní jednotlivých polí rámca ako aj polí hlavičiek vnorených protokolov nie je povolené použiť funkcie poskytované použitým programovacím jazykom. Celý rámec je potrebné spracovať postupne po bajtoch.
 6) Program musí byť organizovaný tak, aby bolo možné jednoducho rozširovať jeho funkčnosť o výpis rámcov podľa ďalších požiadaviek na protokoly v bode 3) - pri doimplementovaní jednoduchej funkčnosti na cvičení.
+
+## Verifikácia výstupu pomocou programu Wireshark
+[alt-text](https://upload.wikimedia.org/wikipedia/commons/thumb/d/df/Wireshark_icon.svg/1024px-Wireshark_icon.svg.png)
