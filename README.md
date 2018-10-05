@@ -33,4 +33,4 @@ Ak počet rámcov danej komunikácie je väčší ako 20, vypíšte iba 10 prvý
 6) Program musí byť organizovaný tak, aby bolo možné jednoducho rozširovať jeho funkčnosť o výpis rámcov podľa ďalších požiadaviek na protokoly v bode 3) - pri doimplementovaní jednoduchej funkčnosti na cvičení.
 
 ## Verifikácia výstupu pomocou programu Wireshark
-![alt-text](https://upload.wikimedia.org/wikipedia/commons/thumb/d/df/Wireshark_icon.svg/1024px-Wireshark_icon.svg.png)
+![alt-text](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT0qVgjmjS8pZ3CGVZTGxuraFuO9a3IgR1y_DSFTfLDasIsQIz-)
