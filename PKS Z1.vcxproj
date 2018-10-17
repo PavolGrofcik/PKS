@@ -87,14 +87,14 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;WIN32;WPCAP;HAVE_REMOTE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\grofc\OneDrive\Dokumenty\Visual Studio 2017\Projects\PKS Z1\PKS Z1\WpdPack\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\Pavol\Desktop\PKS\PKS-master\PKS Z1\WpdPack\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
-      <AdditionalLibraryDirectories>C:\Users\grofc\OneDrive\Dokumenty\Visual Studio 2017\Projects\PKS Z1\PKS Z1\WpdPack\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Users\Pavol\Desktop\PKS\PKS-master\PKS Z1\WpdPack\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>wpcap.lib;Packet.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
