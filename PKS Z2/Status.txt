@@ -2,3 +2,7 @@
 001 - Init pre prenesenie správy
 010 - Aktívny prenos správy
 011 - Koniec prenosu správy
+100
+101
+110
+111 - Keep Alive

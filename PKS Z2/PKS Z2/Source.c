@@ -4,6 +4,8 @@
 #include <Ws2tcpip.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <windows.h>
+#include <pthread.h>
 #include <time.h>
 
 
@@ -18,6 +20,12 @@
 #define OFF1		3				//OFFSET 1
 #define LOCALHOST "127.0.0.1"		//Localhost
 
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+
+int connection;
+
+
 //Hlavièka
 typedef struct header {
 	unsigned long long header_info;
@@ -26,6 +34,13 @@ typedef struct header {
 	unsigned int crc32;
 }Header;
 
+
+//Štruktúra na keep alive
+typedef struct keep{
+
+	char ip[IPLEN];
+	int port;
+}Keep;
 
 //Funkcia zobrazí úvodný interface s choices
 void user_interface() {
@@ -108,6 +123,108 @@ void load_message(char *message) {
 	}
 }
 
+
+//Funkcia zistí connection status klienta a servera
+int find_conn_status() {
+	int status = 0;
+
+	pthread_mutex_lock(&mutex);
+	status = connection;
+	pthread_mutex_unlock(&mutex);
+
+	return status;
+}
+
+//Funkcia na udržianie spojenia
+void* keep_alive(void *arg) {
+
+	int status, s,
+		slen;
+	char buff[LINE_LEN];
+
+	struct sockaddr_in s_in, s_other;
+	Keep *data = (Keep*)arg;
+	Header *h = (Header*)malloc(sizeof(Header));
+
+	s = socket(AF_INET, SOCK_DGRAM, 0);
+
+	if (s == SOCKET_ERROR) {
+		printf("Nepodarilo sa inicializova vlakno\n");
+		pthread_exit(NULL);
+	}
+
+	s_in.sin_family = AF_INET;
+	s_in.sin_port = htons(data->port);
+
+
+	if (inet_pton(AF_INET, data->ip, &s_in.sin_addr) == 0) {
+		printf("Neuspesne vytvorenie socketu s danou IP %s pre vlakno\n", data->ip);
+		return -3;
+	}
+
+	//Zistenie statusu
+	status = find_conn_status();
+	slen = sizeof(s_other);
+
+	//Posielam keep_alive datagram
+	while (TRUE) {
+		if (status == 0) {
+
+			h->header_info = 7;
+			h->crc32 = crc16((char*)h, strlen((char*)h));
+
+			//Odošleme Keep_Alive rámec
+			if (sendto(s, (char*)h, sizeof(Header), 0, (struct sockaddr*) &s_in, sizeof(s_in)) == SOCKET_ERROR) {
+				printf("Nepodarilo sa odoslat keep alive - ukoncenie spojenia\n");
+				pthread_exit(NULL);
+			}
+			else {
+
+				Sleep(5000);		//Uspím na 10 sekúnd
+				status = find_conn_status();
+
+				if (status == -1) {
+					pthread_exit(NULL);
+				}
+			}
+		}
+		else {
+			//Inak sa vlákno uspí a bude èaka na signál o ukonèení prenosu
+			pthread_mutex_lock(&mutex);
+			while (connection != 0) {
+				pthread_cond_wait(&cond, &mutex);
+			}
+			pthread_mutex_unlock(&mutex);
+
+			printf("Vlakno bolo signalizovane\n");
+
+			h->header_info = 7;
+			h->crc32 = crc16((char*)h, strlen((char*)h));
+
+			if (sendto(s, (char*)h, sizeof(Header), 0, (struct sockaddr*) &s_in, sizeof(s_in)) == SOCKET_ERROR) {
+				printf("Nepodarilo sa odoslat keep alive - ukoncenie spojenia\n");
+				pthread_exit(NULL);
+			}
+
+			Sleep(5000);
+
+			status = find_conn_status();
+			if (status == -1) {
+				pthread_exit(NULL);
+			}
+		}
+
+		status = find_conn_status();
+
+		if (status == -1) {
+			printf("Spojenie bolo ukoncene\n");
+			break;
+		}
+	}
+
+	pthread_exit(NULL);
+}
+
 //Funkcia pre server a jeho všetky komponenty
 void server() {
 	SOCKET s;
@@ -176,7 +293,7 @@ void server() {
 		header = (Header*)buff;
 
 		//Zobrazenie adresy odosielate¾a
-		printf("#########################\n");
+		printf("##############################\n");
 		printf("Received packet from %s\n", inet_ntoa(si_other.sin_addr));
 
 		//Urèenie typu správy
@@ -212,8 +329,10 @@ void server() {
 		else if (mesg_status == 1) {
 			//Prijate správy
 		}
+		else if (mesg_status == 7) {
+			printf("Keep Alive :)\n");
+		}
 	}
-
 
 	//Uzavretie socketu po skonèení relácie
 	closesocket(s);
@@ -231,6 +350,9 @@ void client(){
 		choice,
 		fragment = 0,
 		crc_check;
+
+	pthread_t t;
+	Keep *data = NULL;
 
 	struct sockaddr_in client_in, si_other;
 	char buff[BUFFLEN],
@@ -305,6 +427,15 @@ void client(){
 		return -4;
 	}
 
+	//Inicializácia vlákna na udržianie spojenia
+	data = (Keep*)malloc(sizeof(Keep));
+	strcpy(data->ip, ip);
+	data->port = port;
+
+	if (pthread_create(&t, NULL, keep_alive, (void*)data) != 0) {
+		printf("Nepodarilo sa inicializova keep_alive\n");
+	}
+
 	header = (Header*)init_msg;
 	//Zakódovanie základných informácií
 	//Posun o 4 bity !!!
@@ -313,6 +444,9 @@ void client(){
 	//Naviazanie relácie medzi serverom
 	while (TRUE) {
 
+		//Pri neèinnosti klienta - Keep Alive
+		connection = 0;
+
 		//Naèítanie správy
 		printf("Zadajte 0 - odhlasenie klienta\n");
 		printf("Zadajte 1 - odoslanie spravy\n");
@@ -320,9 +454,12 @@ void client(){
 		printf("Zadajte 3 - odoslanie suboru\n");
 		scanf("%d", &choice);
 
+		connection = 1;
+	
 		//Odhlasenie klienta
 		if (choice == 0) {
 			//Klient sa chce odhlási
+			connection = -1;												//Connection nastavím na -1
 
 			Header *h = (Header*)malloc(sizeof(Header));
 
@@ -342,7 +479,7 @@ void client(){
 			memset(buff, '\0', BUFFLEN);
 			if (recvfrom(s, buff, BUFFLEN, 0, (struct sockaddr *) &si_other, &slen) == SOCKET_ERROR)
 			{
-				printf("recvfrom() failed\n");
+				printf("Server neodpoveda, relacia bude ukoncena\n");
 				return -5;
 			}
 
@@ -354,8 +491,8 @@ void client(){
 				printf("Poskodeny ACK od serveru\n");
 			}
 			else {
-				printf("#########################\n");
-				printf("Message: %s\n", h->data);
+				printf("##############################\n");
+				printf("Status servera: %s\n", h->data);
 			}
 
 			free(header);
@@ -389,6 +526,12 @@ void client(){
 			}
 
 			free(message);
+		}
+
+		if (choice == 3) {
+			//Simulujem prenos relácie
+			Sleep(25000);
+			pthread_cond_broadcast(&cond);
 		}
 	}
 
