@@ -1,0 +1,4 @@
+000 - Ukončenie spojenia s ACK od servera
+001 - Init pre prenesenie správy
+010 - Aktívny prenos správy
+011 - Koniec prenosu správy

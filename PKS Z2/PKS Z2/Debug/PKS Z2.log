@@ -1,0 +1,25 @@
+﻿  Source.c
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(39): warning C4129: ' ': unrecognized character escape sequence
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(135): warning C4098: 'server': 'void' function returning a value
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(145): warning C4098: 'server': 'void' function returning a value
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(156): warning C4098: 'server': 'void' function returning a value
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(172): warning C4098: 'server': 'void' function returning a value
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(190): warning C4267: 'function': conversion from 'size_t' to 'unsigned char', possible loss of data
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(197): warning C4267: 'function': conversion from 'size_t' to 'unsigned char', possible loss of data
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(126): warning C4101: 'end': unreferenced local variable
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(126): warning C4101: 'start': unreferenced local variable
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(116): warning C4101: 'slen': unreferenced local variable
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(116): warning C4101: 'recv_len': unreferenced local variable
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(121): warning C4101: 'frag_len': unreferenced local variable
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(250): warning C4098: 'client': 'void' function returning a value
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(280): warning C4098: 'client': 'void' function returning a value
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(296): warning C4098: 'client': 'void' function returning a value
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(305): warning C4098: 'client': 'void' function returning a value
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(331): warning C4267: 'function': conversion from 'size_t' to 'unsigned char', possible loss of data
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(346): warning C4098: 'client': 'void' function returning a value
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(350): warning C4267: 'function': conversion from 'size_t' to 'unsigned char', possible loss of data
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(382): warning C4047: '<=': 'char *' differs in levels of indirection from 'int'
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(382): warning C4047: 'function': 'const char *' differs in levels of indirection from 'int'
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(382): warning C4024: 'strlen': different types for formal and actual parameter 1
+c:\users\grofc\onedrive\desktop\pks 2\pks\pks z2\pks z2\source.c(226): warning C4101: 'damaged': unreferenced local variable
+  PKS Z2.vcxproj -> C:\Users\grofc\OneDrive\Desktop\PKS 2\PKS\PKS Z2\Debug\PKS Z2.exe
