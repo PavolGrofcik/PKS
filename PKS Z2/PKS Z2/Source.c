@@ -11,6 +11,8 @@
 
 #pragma comment(lib,"ws2_32.lib")	//Winsock Library
 
+
+
 #define TRUE 1
 #define IPLEN 16					//DÂûka IP adresy
 #define BUFFLEN 100000				//Max veækosù bufferu
@@ -115,7 +117,7 @@ void load_message(char *message) {
 				break;
 			}
 
-			if (message[i] == 0) {
+			if (message[i] == '\0') {
 				message[i] = buff[counter];
 				counter++;
 			}
@@ -195,8 +197,7 @@ void* keep_alive(void *arg) {
 				pthread_cond_wait(&cond, &mutex);
 			}
 			pthread_mutex_unlock(&mutex);
-
-			printf("Vlakno bolo signalizovane\n");
+			//printf("Vlakno bolo signalizovane\n");
 
 			h->header_info = 7;
 			h->crc32 = crc16((char*)h, strlen((char*)h));
@@ -225,6 +226,31 @@ void* keep_alive(void *arg) {
 	pthread_exit(NULL);
 }
 
+//Funkcia inicializuje spr·vu na prijatie
+char* message_init() {
+	char *new = (char*)malloc(sizeof(char));
+
+	new[0] = "\0";
+
+	return new;
+}
+
+//Funkcia defragmentuje dan˙ spr·vu a pripojÌ prijat˙ Ëasù
+char* defragment(char *buffer, char* message, int frag_size) {
+	int messg_len = strlen(message);
+
+	char *new = (char*)malloc((messg_len + frag_size + 1) * sizeof(char));
+
+	strncpy(new, message, messg_len);
+	memcpy(new + messg_len, buffer + sizeof(Header), frag_size);
+	new[messg_len + frag_size] = '\0';
+
+	free(message);
+
+	return new;
+}
+
+
 //Funkcia pre server a jeho vöetky komponenty
 void server() {
 	SOCKET s;
@@ -238,7 +264,8 @@ void server() {
 		frag_len,
 		crc_check;
 
-	char buff[BUFFLEN];
+	char buff[BUFFLEN],
+		*message = NULL;
 
 	time_t start, end;
 
@@ -278,6 +305,8 @@ void server() {
 
 	//Listening rel·cie medzi klientom
 	si_other_len = sizeof(si_other);
+	message = (char*)malloc(sizeof(char));
+	message[0] = '\0';
 
 	//Prebiehanie hlavnej rel·cia medzi serverom a klientom
 	while (TRUE) {
@@ -293,16 +322,17 @@ void server() {
 		header = (Header*)buff;
 
 		//Zobrazenie adresy odosielateæa
-		printf("##############################\n");
+		printf("#########################\n");
 		printf("Received packet from %s\n", inet_ntoa(si_other.sin_addr));
 
 		//UrËenie typu spr·vy
 		mesg_status = header->header_info & 7;
+		printf("Messg status is %d\n", mesg_status);
 
 		//Ak bolo poûiadanie o ukonËenie spojenia
 		if (mesg_status == 0) {
 
-			printf("#########################\n");
+			printf("\n#########################\n");
 			printf("Message: %s\n", header->data);
 			crc_check = crc16((char*)header, strlen((char*)header));
 			printf("Header crc is %d calculated is %d\n", header->crc32, crc_check);
@@ -312,8 +342,6 @@ void server() {
 			strcpy(ack->data, "Acknowledged");
 			ack->header_info = 0;
 			ack->crc32 = crc16((char*)ack, strlen((char*)ack));
-			printf("Server ACK crc16 %d\n", ack->crc32);
-
 
 			if (sendto(s, (char*)ack, sizeof(Header), 0, (struct sockaddr *) &si_other, sizeof(si_other)) == SOCKET_ERROR)
 			{
@@ -328,6 +356,25 @@ void server() {
 		}
 		else if (mesg_status == 1) {
 			//Prijate spr·vy
+			printf("\n#########################\n");
+			printf("Message: %s\n", header->data);
+			printf("Header info %d\n", header->header_info);
+			frag_len = extract(header->header_info, 3, 20);
+			printf("Frag len je %d\n", frag_len);
+		}
+		else if (mesg_status == 2) {
+
+			message = defragment(buff, message, frag_len);
+		}
+		else if (mesg_status == 3) {
+			printf("Message crc %d cal %d\n", header->crc32, crc16((char*)header, strlen((char*)header)));
+			message = defragment(buff, message, frag_len);
+			printf("Message: %s\n", buff + sizeof(Header));
+			printf("Message defragmented is %s\n", message);
+
+			free(message);
+			message = NULL;
+			message = message_init();
 		}
 		else if (mesg_status == 7) {
 			printf("Keep Alive :)\n");
@@ -349,7 +396,9 @@ void client(){
 		frag_len,
 		choice,
 		fragment = 0,
-		crc_check;
+		crc_check,
+		sequence,
+		frag_num;
 
 	pthread_t t;
 	Keep *data = NULL;
@@ -420,7 +469,7 @@ void client(){
 	
 	//Vytvorenie init segmentu pri nadviazanÌ spojenia
 	init_msg = handshake(frag_len);
-	slen = sizeof(client_in);
+	slen = sizeof(si_other);
 
 	if (!init_msg) {
 		printf("Inicializacia spravy zlyhala\n");
@@ -433,7 +482,7 @@ void client(){
 	data->port = port;
 
 	if (pthread_create(&t, NULL, keep_alive, (void*)data) != 0) {
-		printf("Nepodarilo sa inicializovaù keep_alive\n");
+		printf("Nepodarilo sa inicializovaù keep_alive vlakno\n");
 	}
 
 	header = (Header*)init_msg;
@@ -459,7 +508,7 @@ void client(){
 		//Odhlasenie klienta
 		if (choice == 0) {
 			//Klient sa chce odhl·siù
-			connection = -1;												//Connection nastavÌm na -1
+			connection = -1;
 
 			Header *h = (Header*)malloc(sizeof(Header));
 
@@ -495,7 +544,6 @@ void client(){
 				printf("Status servera: %s\n", h->data);
 			}
 
-			free(header);
 			closesocket(s);
 			return;
 		}
@@ -503,34 +551,100 @@ void client(){
 		//NaËÌtanie a odoslanie spr·vy
 		if (choice == 1 || choice == 2) {
 			printf("Zadajte spravu\n");
-			printf("Na koniec zadajte 2x Enter\n");
+
 			getc(stdin);
 
 			message = (char*)malloc(BUFFLEN * sizeof(char));
-			memset(message, 0, BUFFLEN);
+			memset(message, '\0', BUFFLEN);
 
-			load_message(message);
-			//printf("Sprava je %s\n", message);
+			//load_message(message);
+			gets_s(message, BUFFLEN);
+			printf("Sprava je %s\n", message);
+
+			//Alok·cia datagramu na odoslanie a pretypovanie na typ Header
+			datagram = (char*)malloc((sizeof(Header) + frag_len + 1) * sizeof(char));
+			header = (Header*)datagram;
+
+			//Odoölem ˙vodn˝ datagram na upovedomenie ûe ide o spr·vu
+			//Z·roveÚ veækosù fragmentu
+			Header *init = (Header*)malloc(sizeof(Header));
+			frag_num = strlen(message) / frag_len;
+			frag_num << 3;
+
+			init->header_info = (frag_len << 3)  + 1;
+			strcpy(init->data, "Zaciatok posielania spravy");
+			printf("Header info %ld\n", init->header_info);
+			printf("Header frag_len %d calc %d\n", frag_len, extract(init->header_info, 3, 20));
+			init->crc32 = crc16((char*)init, strlen((char*)init));
+
+			if (sendto(s, (char*)init, sizeof(Header), 0, (struct sockaddr*)&client_in, sizeof(client_in)) == SOCKET_ERROR) {
+				printf("Nepodarilo sa odoslat init spravu serveru\n");
+				free(datagram);
+				free(message);
+				message = datagram = NULL;
+				continue;
+			}
 
 			//Odoslanie spr·vy
 			if (choice == 1) {
 
-				//Nastavenie fragmentu
-				if (strlen(message <= frag_len)) {
-					//Odoöleme naraz
+				//Odoöleme naraz
+				if (strlen(message) + sizeof(Header) <= frag_len) {
+
+					memcpy(datagram + sizeof(Header), message, strlen(message)+1);
+					header->header_info = 3;
+					header->crc32 = crc16((char*)header, strlen((char*)header));
+					
+					if (sendto(s, (char*)datagram, sizeof(Header) + frag_len , 0, (struct sockaddr*)&client_in, sizeof(client_in)) == SOCKET_ERROR) {
+						printf("Nepodarilo sa odoslat spravu serveru\n");
+					}
 				}
 				else {
-					//MusÌm nastaviù fragment·ciu podæa zvolenej veækosti hlaviËky
-				}
+					//MusÌm nastaviù fragment·ciu podæa zvolenej veækosti hlaviËky a n·sledne znovuposlanie r·mcov
+					sequence = strlen(message);
+					fragment = 1;
 
+
+					//Rozfragmentovanie a n·slednÈ odosielanie
+					while (sequence) {
+
+						//UrËenie stavu odosielania
+						if (sequence <= frag_len) {
+							header->header_info = 3;		//Posledn˝ fragment
+						}
+						else {
+							header->header_info = 2;
+						}
+
+						memcpy(datagram + sizeof(Header), message + (fragment-1) * frag_len, min(frag_len,sequence));
+						
+						sequence -= frag_len;
+
+						//ZakÛdovanie header sequence number
+						header->header_info += (fragment << 3);
+						header->crc32 = crc16((char*)datagram, strlen((char*)header));
+						fragment++;
+
+						if (sendto(s, datagram, frag_len + sizeof(Header), 0, (struct sockaddr *) &client_in, sizeof(client_in)) == SOCKET_ERROR)
+						{
+							printf("Nepodarilo sa odoslaù datagram %d\n", fragment);
+							continue;
+						}
+					}
+				}
 			}
 
+			free(init);
+			free(datagram);
 			free(message);
+
+			message = datagram = NULL;
+			pthread_cond_broadcast(&cond);
 		}
 
 		if (choice == 3) {
 			//Simulujem prenos rel·cie
-			Sleep(25000);
+			Sleep(15000);
 			pthread_cond_broadcast(&cond);
 		}
 	}
