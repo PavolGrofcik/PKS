@@ -35,9 +35,22 @@ Ak počet rámcov danej komunikácie je väčší ako 20, vypíšte iba 10 prvý
 ## Verifikácia výstupu pomocou programu Wireshark
 ![alt-text](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT0qVgjmjS8pZ3CGVZTGxuraFuO9a3IgR1y_DSFTfLDasIsQIz-)
 
-## Zadanie 1: UDP Komunikátor
+## Zadanie 2: UDP Komunikátor
 
 Nad protokolom UDP (User Datagram Protocol) transportnej vrstvy sieťového modelu TCP/IP navrhnite a implementujte program, ktorý umožní komunikáciu dvoch účastníkov v sieti Ethernet, teda prenos správ ľubovoľnej dĺžky medzi počítačmi (uzlami).
 Program bude pozostávať z dvoch častí – vysielacej a prijímacej. Vysielací uzol pošle správu inému uzlu v sieti. Predpokladá sa, že v sieti dochádza k stratám dát. Vysielajúca strana rozloží správu na menšie časti - fragmenty, ktoré samostatne pošle. Správa sa fragmentuje iba v prípade, ak je dlhšia ako max. veľkosť fragmentu. Veľkosť fragmentu musí mať používateľ možnosť nastaviť takú, aby neboli znova fragmentované na linkovej vrstve.
 Po prijatí správy na cieľovom uzle tento správu zobrazí. Ak je správa poslaná ako postupnosť fragmentov, najprv tieto fragmenty spojí a zobrazí pôvodnú správu.
 Komunikátor musí vedieť usporiadať správy do správneho poradia, musí obsahovať kontrolu proti chybám pri komunikácii a znovuvyžiadanie chybných rámcov, vrátane pozitívneho aj negatívneho potvrdenia. Pri nečinnosti komunikátor automaticky odošle paket pre udržanie spojenia každých 60-120s. Odporúčame riešiť cez vlastne definované signalizačné správy.
+
+Program musí mať nasledovné vlastnosti (minimálne):
+1. Program musí byť implementovaný v jazyku C/C++ s využitím knižníc na prácu s UDP socket, skompilovateľný a spustiteľný v učebniach. Odporúčame použiť knižnicu sys/socket.h pre linux/BSD a winsock2.h pre Windows. Použité knižnice a funkcie musia byť schválené cvičiacim. V programe môžu byť použité aj knižnice na prácu s IP adresami a portami:
+arpa/inet.h
+netinet/in.h
+2. Program musí pracovať s dátami optimálne (napr. neukladať IP adresy do 4x int).
+3. Pri posielaní správy musí používateľovi umožniť určiť cieľovú IP a port.
+4. Používateľ musí mať možnosť zvoliť si max. veľkosť fragmentu.
+5. Obe komunikujúce strany musia byť schopné zobrazovať:
+a. poslanú resp. prijatú správu,
+b. veľkosť fragmentov správy.
+6. Možnosť odoslať minimálne 1 chybný fragment (do fragmentu je cielene vnesená chyba, to znamená, že prijímajúca strana deteguje chybu pri prenose).
+7. Možnosť odoslať súbor a v tom prípade ich uložiť na prijímacej strane ako rovnaký súbor. Akceptuje sa iba ak program prenesie 1MB súbor do 30s bez chýb.
