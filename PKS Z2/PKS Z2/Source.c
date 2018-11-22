@@ -15,7 +15,7 @@
 
 #define TRUE 1
 #define IPLEN 16					//DÂûka IP adresy
-#define BUFFLEN 100000				//Max veækosù bufferu
+#define BUFFLEN 10000000			//Max veækosù bufferu
 #define LINE_LEN 1024				//Max dÂûka riadku pri naËÌtanÌ
 #define FRAGMENT_SIZE 1452			//Veækosù fragmentu
 #define ESTABLISHED 2				//Status pre nadviazanie spojenia
@@ -26,6 +26,8 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 int connection;
+char buff[BUFFLEN];
+char rec[BUFFLEN];
 
 
 //HlaviËka
@@ -36,6 +38,17 @@ typedef struct header {
 	unsigned int crc32;
 }Header;
 
+//ätrukt˙ra na prenos s˙boru
+typedef struct list{
+	char data[FRAGMENT_SIZE];
+	int sequence;
+	struct list *next;
+}List;
+
+typedef struct arr {
+	char data[FRAGMENT_SIZE];
+	int sequence;
+}Arr;
 
 //ätrukt˙ra na keep alive
 typedef struct keep{
@@ -44,6 +57,12 @@ typedef struct keep{
 	int port;
 }Keep;
 
+Arr pole[100000];
+
+
+//Z·sobnÌk
+List *first = NULL;
+List *last = NULL;
 //Funkcia zobrazÌ ˙vodn˝ interface s choices
 void user_interface() {
 
@@ -78,7 +97,7 @@ unsigned short crc16(const unsigned char* data_p, unsigned char length) {
 }
 
 //Funkcia sl˙ûi na extrakciu d·t
-unsigned short extract(unsigned long value, int begin, int end)
+unsigned long long extract(unsigned long value, int begin, int end)
 {
 	unsigned short mask = (1 << (end - begin)) - 1;
 	return (value >> begin) & mask;
@@ -95,6 +114,37 @@ char* handshake(int frag_size) {
 		return new;
 	}
 }
+
+List* new_node() {
+	List *new = (List*)malloc(sizeof(List));
+
+	if (!new) {
+		printf("Nepodarilo sa alokovat pamat\n");
+		return NULL;
+	}
+
+	new->next = NULL;
+
+	return new;
+}
+
+//Funkcia prid· do fronty dan˝ message
+void add_front(char *msg, int len, int seq) {
+	if (first == NULL) {
+		first = new_node();
+		last = first;
+		strncpy(last->data, msg, len);
+		last->sequence = seq;
+	}
+	else {
+		last->next = new_node();
+		last = last->next;
+		strncpy(last->data, msg, len);
+		last->sequence = seq;
+	}
+}
+
+
 
 //Funkcia naËÌta do buffra spr·vu
 void load_message(char *message) {
@@ -242,11 +292,29 @@ char* defragment(char *buffer, char* message, int frag_size) {
 	char *new = (char*)malloc((messg_len + frag_size + 1) * sizeof(char));
 
 	strncpy(new, message, messg_len);
+
 	memcpy(new + messg_len, buffer + sizeof(Header), frag_size);
 	new[messg_len + frag_size] = '\0';
 
 	free(message);
 
+	return new;
+}
+
+//Funkcia defragmentuje dan˝ fragment s˙boru a pripojÌ prijat˙ Ëasù
+char* defragment_file(char *buffer, char *message, int frag_size) {
+	int messg_len = strlen(message);
+
+	char *new = (char*)malloc((messg_len + frag_size + 1) * sizeof(char));
+
+	strncpy(new, message, messg_len);
+	//printf("Po prekopirovani povodneho %s\n", message);
+	memcpy(new + messg_len, buffer + sizeof(Header), frag_size);
+	new[messg_len + frag_size] = '\0';
+	//printf("Po prekopirovani buffra %s\n", new);
+	free(message);
+
+	//printf("New is: %s\n", new);
 	return new;
 }
 
@@ -263,11 +331,16 @@ void server() {
 		mesg_status,
 		frag_len,
 		crc_check,
-		file_size;
-		long frag_num;
+		file_size,
+		*resend = NULL;
 
-	char buff[BUFFLEN],
+	long frag_num, seek_num;
+
+	char name[256] = "",
 		*message = NULL;
+	//char buff[BUFFLEN];
+
+	FILE *fw = NULL;
 
 	time_t start, end;
 
@@ -313,14 +386,14 @@ void server() {
 	//Prebiehanie hlavnej rel·cia medzi serverom a klientom
 	while (TRUE) {
 
-		memset(buff, '\0', BUFFLEN);
+		memset(rec, '\0', BUFFLEN);
 		//»akanie na spojenie s klientom
-		if ((status = recvfrom(s, buff, BUFFLEN, 0, (struct sockaddr*) &si_other, &si_other_len)) == SOCKET_ERROR) {
+		if ((status = recvfrom(s, rec, BUFFLEN, 0, (struct sockaddr*) &si_other, &si_other_len)) == SOCKET_ERROR) {
 			printf("Neuspesny receive\n");
 			return -4;
 		}
 
-		header = (Header*)buff;
+		header = (Header*)rec;
 
 		//Zobrazenie adresy odosielateæa
 		printf("\n##############################\n");
@@ -328,8 +401,6 @@ void server() {
 
 		//UrËenie typu spr·vy
 		mesg_status = header->header_info & 7;
-		//printf("Header info %ld\n", header->header_info);
-		//printf("Typ spravy %ld\n", mesg_status);
 
 		//Ak bolo poûiadanie o ukonËenie spojenia
 		if (mesg_status == 0) {
@@ -364,6 +435,10 @@ void server() {
 			printf("Velkost fragmentu: %d\n", frag_len);
 			printf("Pocet fragmentov: %ld\n", frag_num);
 			printf("CRC16: %s\n", header->crc32 == crc16((char*)header, strlen((char*)header)) ? "Ok" : "Bad");
+
+			if ((resend = (int*)calloc(frag_len, sizeof(int))) == NULL) {
+				printf("Nepodarilo sa alokovat Resend datagramy\n");
+			}
 			
 		}
 		else if (mesg_status == 2) {
@@ -371,11 +446,11 @@ void server() {
 			printf("Velkost fragmentu: %d\n", frag_len);
 			printf("Poradie fragmentu: %d\n", extract(header->header_info, 3, 20));
 			printf("CRC16: %s\n", header->crc32 == crc16((char*)header, strlen((char*)header))? "Ok":"Bad");
-			message = defragment(buff, message, frag_len);
+			message = defragment(rec, message, frag_len);
 			
 		}
 		else if (mesg_status == 3) {
-			message = defragment(buff, message, frag_len);
+			message = defragment(rec, message, frag_len);
 			printf("Velkost fragmentu: %d\n", frag_len);
 			printf("Poradie fragmentu %d\n", extract(header->header_info, 3, 20));
 			printf("CRC16: %s\n", header->crc32 == crc16((char*)header, strlen((char*)header)) ? "Ok" : "Bad");
@@ -385,33 +460,181 @@ void server() {
 			free(message);
 			message = NULL;
 			message = message_init();
-			memset(buff, '\0', BUFFLEN);
+			free(resend);
+			resend = NULL;
+			memset(rec, '\0', BUFFLEN);
 		}
 		//Prijatie s˙boru
 		else if (mesg_status == 4) {
 
-			file_size = extract(header->header_info, 3, 20);
-			printf("Velkost suboru %d\n", file_size);
+			//UloûÌme si veækosù  a poËet fragmentov
+			frag_len = extract(header->header_info, 3, 15);
+			frag_num = extract(header->header_info, 15, 45);
+			strcpy(name, header->data);
+
+			printf("Velkost fragmentu %ld\n", frag_len);
+			printf("Pocet fragmentov %ld\n", frag_num);
+			printf("Nazov suboru %s\n", name);
+
+			fw = fopen(name, "ab");	//Bolo wb
 			
+			//first = last = NULL;
+			message = message_init();
+
+			//Inicializujeme pole podæa seq number
+
 		}
 		else if (mesg_status == 5) {
 
-			FILE *fw = NULL;
-			fw = fopen("subor.txt", "w");
-			if (fwrite(buff + sizeof(Header), 1, file_size, fw) <= 0) {
+			/*FILE *fw = NULL;
+			//fw = fopen("subor.txt", "w");
+			fw = fopen(name, "wb");
+			if (fwrite(rec + sizeof(Header), 1, file_size, fw) <= 0) {
 				printf("Nepodarilo sa ulozit subor\n");
 			}
 			else {
 				printf("Subor bol uspesne ulozeny\n");
 			}
+
 			if (fclose(fw) == EOF) {
 				printf("Subor sa nepodarilo zatvorit\n");
 			}
+			*/
+
+			int counter = 1;
+			seek_num = 1;
 			
+			while (TRUE) {
+
+				header = (Header*)rec;
+
+				int seq = extract(header->header_info, 3, 33);
+				int file_status = (header->header_info >> 33) & 3;
+				printf("File status %ld\n", file_status);
+				printf("Seq is %d\n", seq);
+				printf("Counter is %d\n",counter);
+
+				//Znovuvyûiadanie datagramu
+				if (counter != seq) {
+					seek_num = counter;
+					while (TRUE) {
+						Header *ack = (Header*)malloc(sizeof(Header));
+
+						strcpy(ack->data, "UnAcknowledged");
+						ack->header_info = 4 + (counter << 3);
+						ack->crc32 = crc16((char*)ack, strlen((char*)ack));
+
+						//Odoslanie Unacknowledged
+						if (sendto(s, (char*)ack, sizeof(Header), 0, (struct sockaddr *) &si_other, sizeof(si_other)) == SOCKET_ERROR)
+						{
+							printf("sendto() failed with error code : %d", WSAGetLastError());
+							continue;
+						}
+
+						//»akanie na spr·vny r·mec
+						if ((status = recvfrom(s, rec, BUFFLEN, 0, (struct sockaddr*) &si_other, &si_other_len)) == SOCKET_ERROR) {
+							printf("Neuspesny receive\n");
+							return -4;
+						}
+
+						header = (Header*)rec;
+						int seq = extract(header->header_info, 3, 33);
+						int file_status = (header->header_info >> 33) & 3;
+
+
+						// Odoslanie ACKnowledged
+						if (seq == counter) {
+							strcpy(ack->data, "Acknowledged");
+							ack->header_info = 5 + (seek_num << 3);
+							ack->crc32 = crc16((char*)ack, strlen((char*)ack));
+
+								if (sendto(s, (char*)ack, sizeof(Header), 0, (struct sockaddr *) &si_other, sizeof(si_other)) == SOCKET_ERROR)
+								{
+									printf("sendto() failed with error code : %d", WSAGetLastError());
+									continue;
+								}
+							break;
+						}
+					}
+
+				}
+				else {
+					//Odoöleme ACK
+					Header *ack = (Header*)malloc(sizeof(Header));
+
+					strcpy(ack->data, "Acknowledged");
+					ack->header_info = 5 + (counter << 3);
+					ack->crc32 = crc16((char*)ack, strlen((char*)ack));
+
+					//Odoslanie Unacknowledged
+					if (sendto(s, (char*)ack, sizeof(Header), 0, (struct sockaddr *) &si_other, sizeof(si_other)) == SOCKET_ERROR)
+					{
+						printf("sendto() failed with error code : %d", WSAGetLastError());
+						//continue;
+					}
+
+					seq = counter;
+				}
+
+				if (file_status == 1) {
+
+					//Kontrolovaù 
+					pole[seq].sequence = seq;
+					strncpy(pole[seq].data, rec + sizeof(Header), frag_len);
+					fwrite(rec + sizeof(Header), 1, frag_len, fw);
+					//Bolo fwrite(rec + sizeof(Header),1, strlen(rec + sizeof(Header)), fw);
+				}
+				else {
+
+
+					pole[seq].sequence = seq;
+					strncpy(pole[seq].data, rec + sizeof(Header), frag_len);
+
+					//MusÌme spojiù r·mce podæa poradia ako priöli
+					/*for (int i = 1; i <= frag_num; i++) {
+						if (pole[i].sequence != i) {
+							printf("Packet  %d nedorazil!\n", i);
+						}
+						message = defragment_file(pole[i].data, message, frag_len);
+					}
+					*/
+
+					/*if (fwrite(message, 1, strlen(message), fw) <= 0) {
+						printf("Nepodarilo sa ulozit subor\n");
+					}
+					else {
+						printf("Subor bol uspesne ulozeny\n");
+					}*/
+
+					//Bolo fwrite(rec + sizeof(Header), 1, strlen(rec + sizeof(Header)), fw);
+					//long min_frag_len = header->header_info
+					fwrite(rec + sizeof(Header), 1, strlen(rec + sizeof(Header)), fw);
+
+					if (fclose(fw) == EOF) {
+						printf("Subor sa nepodarilo zatvorit\n");
+					}
+					else {
+						printf("Subor bol uspesne ulozeny\n");
+					}
+
+					free(message);
+					message = NULL;
+					message = message_init();
+
+					break;
+				}
+
+				//»akanie na ÔalöÌ r·mec
+				if ((status = recvfrom(s, rec, BUFFLEN, 0, (struct sockaddr*) &si_other, &si_other_len)) == SOCKET_ERROR) {
+					printf("Neuspesny receive\n");
+					return -4;
+				}
+
+				counter++;
+			}
 		}
+		//Prijatie chybnej spr·vy
 		else if (mesg_status == 6) {
-			frag_len = extract(header->header_info, 3, 15);			//Extrahujmee veækosù fragmentu
-			frag_num = extract(header->header_info, 15, 30);		//Extrahujeme poËet fragmentov
 
 			printf("Velkost fragmentu: %d\n", frag_len);
 			printf("Pocet fragmentov: %ld\n", frag_num);
@@ -427,6 +650,8 @@ void server() {
 				ack->header_info = 6;
 				ack->crc32 = crc16((char*)ack, strlen((char*)ack));
 
+				//resend[] = 1;
+
 				if (sendto(s, (char*)ack, sizeof(Header), 0, (struct sockaddr *) &si_other, sizeof(si_other)) == SOCKET_ERROR)
 				{
 					printf("sendto() failed with error code : %d", WSAGetLastError());
@@ -434,7 +659,7 @@ void server() {
 				}
 			}
 			else {
-				printf("Dorucena sprava %s\n", buff + sizeof(Header));
+				printf("Dorucena sprava %s\n", rec + sizeof(Header));
 			}
 		}
 		else if (mesg_status == 7) {
@@ -461,13 +686,14 @@ void client(){
 		sequence,
 		frag_num,
 		file_size,
-		error_rate;
+		error_rate,
+		*resend = NULL;;
 
 	pthread_t t;
 	Keep *data = NULL;
 
 	struct sockaddr_in client_in, si_other;
-	char buff[BUFFLEN],
+	char //buff[BUFFLEN],
 		ip[IPLEN],
 		path[256],
 		*message = NULL,
@@ -718,7 +944,8 @@ void client(){
 					{
 						printf("Nepodarilo sa odoslaù datagram %d\n", fragment);
 						break;
-					}
+					}	
+
 				}
 				
 				printf("Sprava bola uspesne odoslana\n");
@@ -727,7 +954,7 @@ void client(){
 			}
 			else {
 				//Chybov· spr·va!!!
-				printf("Zadajte chybovost v \%\n");
+				printf("Zadajte chybovost v %%: ");
 				scanf("%d", &error_rate);
 
 				if (error_rate <= 0 || error_rate >100) {
@@ -765,6 +992,8 @@ void client(){
 
 						printf("##############################\n");
 						printf("Server message %s\n", header->data);
+						printf("Sprava je %s\n", message);
+						printf("Datagram sprava je %s\n", datagram + sizeof(Header));
 
 						//Znovu odoölem dan˙ spr·vu
 						header = (Header*)datagram;
@@ -785,9 +1014,53 @@ void client(){
 						printf("Resend bol uspesne odoslany\n");
 					}
 					else {
-						//Nastavenie procesu fragment·cie
+						//Nastavenie procesu fragment·cie s pomocn˝m poæom na znovuodoslanie ramcov
+						//Inicializovanie random number generator
+						srand(time(NULL));
+
 						sequence = strlen(message);
 						fragment = 1;
+
+						if ((resend = (int*)calloc(frag_num , sizeof(int))) == NULL) {
+							printf("Nepodarilo sa inicializovat pole na resend datagramov\n");
+						}
+
+
+						while (sequence > 0) {
+
+							memcpy(datagram + sizeof(Header), message + (fragment - 1)*frag_len, frag_len);
+
+							sequence -= frag_len;
+
+							printf("##############################\n");
+							printf("Fragment %d\n", fragment);
+							printf("Velkost fragmentu: %d\n", frag_len);
+							printf("Sprava: %.*s\n", frag_len, datagram + sizeof(Header));
+
+							header->header_info = (fragment << 3) + 6;
+
+							//Ak je pravdopodnosù niûöia ako error rate - odoöleme chybn˝ r·mec
+							if (rand() % 100 <= error_rate) {
+								header->crc32 = crc16((char*)datagram, strlen((char*)header));
+								header->crc32 += 1;
+							}
+							else {
+								header->crc32 = crc16((char*)datagram, strlen((char*)header));
+							}
+
+							
+							fragment++;
+
+							if (sendto(s, datagram, frag_len + sizeof(Header), 0, (struct sockaddr *) &client_in, sizeof(client_in)) == SOCKET_ERROR)
+							{
+								printf("Nepodarilo sa odoslaù datagram %d\n", fragment);
+								break;
+							}
+						}
+
+						//N·sledne budeme prÌjmaù Resend Ë. datagramov od servera
+						//Najprv odoöle poËet vyûiadan˝ch r·mcov
+
 					}
 				}
 			}
@@ -804,48 +1077,82 @@ void client(){
 		if (choice == 3) {
 
 			FILE *f = NULL;
+			char save[256] = "";
 
-			printf("Zadajte nazov/path k suboru\n");
+			printf("Zadajte subor na odoslanie\n");									//NaËÌtanie s˙boru
 			scanf("%s", path);
 
-			//Oöetrenie s˙boru
-			if ((f = fopen(path, "r")) == NULL) {
+			printf("Zadajte nazov pre odosielany subor\n");
+			scanf("%s", save);
+			
+			if ((f = fopen(path, "rb")) == NULL) {
 				printf("Subor sa nepodarilo otvorit\n");
 				pthread_cond_broadcast(&cond);
 				continue;
 			}
 
-			fseek(f, 0, SEEK_END);
+			fseek(f, 0, SEEK_END);													//NaËÌtanie veækosti s˙boru
 			file_size = ftell(f);
-			//fseek(f, 0, SEEK_SET);
+			fseek(f, 0, SEEK_SET);
 			printf("Velkost suboru je %d\n", file_size);
-			rewind(f);
 
-			message = (char*)malloc(1000000 * sizeof(unsigned char));
-			if (!message) {
-				printf("Nepodarilo sa alokovat pamat\n");
-				pthread_cond_broadcast(&cond);
+
+			if ((message = (unsigned char*)calloc((file_size + 10), sizeof(unsigned char))) == NULL) {
+				printf("Nepodarilo sa alokovat pamat pre spravu\n");
+				fclose(f);
+
+				//pthread_cond_broadcast(&cond);
+				continue;
 			}
-			//memset(message, '\0', 1000000);
-			
 
-			//NaËÌtanie s˙boru do spr·vy??????????????????
-			if (fread(message + sizeof(Header), file_size, 1, f) <= 0) {
-				printf("Nepodarilo sa nacitat subor");
+			if ((datagram = (unsigned char*)malloc((sizeof(Header) + 1 + frag_len) * sizeof(unsigned char))) == NULL) {
+				printf("Nepodarilo sa alokovaù pamate pre datagram\n");
+				fclose(f);
 				free(message);
 				pthread_cond_broadcast(&cond);
 				continue;
 			}
-			header = (Header*)message;
 
-			//Fragment·cia s˙boru
+			//Odoölem inicializaËn˝ paket na s˙bor
+			int fread_status = fread(message, file_size, 1, f);
+
+			if (fread_status < 0) {
+				printf("Nie je mozne nacitat subor - fread Error\n");
+				free(datagram);
+				free(message);
+				pthread_cond_broadcast(&cond);
+				continue;
+			}
+
+			//printf("Nacitana sprava je %s\n", message);
+
+			//ZakÛdovanie a odosielanie s˙boru
+			//UrËÌme poËet fragmentov a zakÛdovanie
+			/*if (strlen(message) % frag_len == 0) {
+				frag_num = strlen(message) / frag_len;
+			}
+			else {
+				frag_num = strlen(message) / frag_len;
+				frag_num += 1;
+			}*/
+
+			if (file_size % frag_len == 0) {
+				frag_num = file_size / frag_len;
+			}
+			else {
+				frag_num = file_size / frag_len;
+				frag_num += 1;
+			}
+
+			//Fragment·cia s˙boru s odoslanÌm init datagramu
 			Header *init = (Header*)malloc(sizeof(Header));
 
-			init->header_info = (file_size << 3) + 4;
-			strcpy(init->data, "Zaciatok posielania suboru");
+			init->header_info = (frag_num << 15) + (frag_len << 3) + 4;
+			strcpy(init->data, save);
 			printf("Header info %ld\n", init->header_info);
 			init->crc32 = crc16((char*)init, strlen((char*)init));
-			printf("File size %d calc %d\n", file_size, extract(header->header_info, 3, 20));
+			printf("Frag length %d calc %ld\n", frag_len, extract(init->header_info, 3, 15));
+			printf("Fragments %d calc %ld\n", frag_num, extract(init->header_info, 15, 45));
 
 			if (sendto(s, (char*)init, sizeof(Header), 0, (struct sockaddr*)&client_in, sizeof(client_in)) == SOCKET_ERROR) {
 				printf("Nepodarilo sa odoslat init spravu serveru\n");
@@ -855,15 +1162,105 @@ void client(){
 				continue;
 			}
 
-			header->header_info = 5;
+			header = (Header*)datagram;
 
-			if(sendto(s, message, file_size + sizeof(Header), 0, (struct sockaddr*)&client_in, sizeof(client_in)) == SOCKET_ERROR){
-				printf("Nepodarilo sa odoslat subor\n");
-				fclose(f);
-				pthread_cond_broadcast(&cond);
-				free(message);
-				continue;
+			//sequence = strlen(message);
+			sequence = file_size;
+			//printf("Strlen mssg %d file_size %d\n", sequence, file_size);
+			fragment = 1;
+			unsigned long long a = 1,
+				b = 2,
+				c;
+
+			//printf("Loaded message %s\n", message);
+
+			while (sequence > 0) {
+
+				memset(datagram + sizeof(Header), '\0', frag_len);
+
+				if (sequence <= frag_len) {
+
+					header->header_info = 5 + (b << 33) + (fragment << 3);		//Koniec s˙boru
+
+					//ZakÛdujeme min velkost
+				}
+				else {
+					header->header_info = (a << 33) + (fragment << 3) + 5;		//Nie je koniec - defragmentujeme
+				}
+
+				//Fragmentovanie
+				memcpy(datagram + sizeof(Header), message + (fragment - 1)*frag_len, min(frag_len, sequence));
+
+				sequence -= frag_len;
+
+				printf("##############################\n");
+				//printf("Message to sent %s\n", datagram + sizeof(Header));
+				//printf("Header %lld\n", header->header_info);
+				//printf("Fragment %d\n", fragment);
+				//printf("Velkost fragmentu: %d\n", frag_len);
+
+				//Kontrola
+				printf("Messg status %d\n", header->header_info & 7);
+				printf("Fragment num %ld\n", extract(header->header_info, 3, 33));
+				printf("Send status %ld\n", (header->header_info >> 33) & 3);
+
+				header->crc32 = crc16((char*)datagram, strlen((char*)header));
+
+
+				if (sendto(s, datagram, frag_len + sizeof(Header), 0, (struct sockaddr *) &client_in, sizeof(client_in)) == SOCKET_ERROR)
+				{
+					printf("Nepodarilo sa odoslaù datagram %d\n", fragment);
+					break;
+				}
+
+
+				if (recvfrom(s, buff, BUFFLEN, 0,(struct sockaddr*) &si_other, &slen) == SOCKET_ERROR) {
+					printf("Nedostal ACK od servera");
+					return;
+				}
+
+				Header *tmp = (Header*)buff;
+				c = tmp->header_info >> 3;
+				printf("Sprava: %s\n", tmp->data);
+
+
+				//Status spr·vy 5 je ACK 
+				if (!strcmp("Acknowledged", tmp->data)) {
+					//Acknowledged
+					fragment++;
+					continue;
+				}
+				else {
+					printf("Dozadovany ack %ld\n", c);
+					while (TRUE) {
+						
+						if (sendto(s, datagram, frag_len + sizeof(Header), 0, (struct sockaddr *) &client_in, sizeof(client_in)) == SOCKET_ERROR)
+						{
+							printf("Nepodarilo sa odoslaù datagram %d\n", fragment);
+							break;
+						}
+
+						if (recvfrom(s, buff, BUFFLEN, 0, (struct sockaddr*) &si_other, &slen) == SOCKET_ERROR) {
+							printf("Nedostal ACK od servera");
+							return;
+						}
+						tmp = (Header*)buff;
+
+						c = tmp->header_info >> 3;
+
+						if ((tmp->header_info & 3) == 5) {
+							printf("ACK od servera %s\n", tmp->data);
+							break;
+						}
+	
+					}
+				}
+
+				fragment++;
 			}
+
+			printf("Sprava bola uspesne odoslana\n");
+			printf("##############################\n");
 
 
 			fclose(f);

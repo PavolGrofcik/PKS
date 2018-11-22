@@ -96,6 +96,9 @@
       <SubSystem>Console</SubSystem>
       <AdditionalLibraryDirectories>C:\Users\grofc\OneDrive\Desktop\PKS 2\PKS Z2\PKS Z2\pthreads-dll-2005-01-25\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>pthreadVC1.lib;pthreadVSE1.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <HeapReserveSize>1000</HeapReserveSize>
+      <StackReserveSize>1000</StackReserveSize>
+      <HeapCommitSize>1000</HeapCommitSize>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
