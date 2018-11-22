@@ -11,8 +11,6 @@
 
 #pragma comment(lib,"ws2_32.lib")	//Winsock Library
 
-
-
 #define TRUE 1
 #define IPLEN 16					//DÂûka IP adresy
 #define BUFFLEN 10000000			//Max veækosù bufferu
@@ -481,25 +479,9 @@ void server() {
 			//first = last = NULL;
 			message = message_init();
 
-			//Inicializujeme pole podæa seq number
 
 		}
 		else if (mesg_status == 5) {
-
-			/*FILE *fw = NULL;
-			//fw = fopen("subor.txt", "w");
-			fw = fopen(name, "wb");
-			if (fwrite(rec + sizeof(Header), 1, file_size, fw) <= 0) {
-				printf("Nepodarilo sa ulozit subor\n");
-			}
-			else {
-				printf("Subor bol uspesne ulozeny\n");
-			}
-
-			if (fclose(fw) == EOF) {
-				printf("Subor sa nepodarilo zatvorit\n");
-			}
-			*/
 
 			int counter = 1;
 			seek_num = 1;
@@ -577,43 +559,19 @@ void server() {
 				}
 
 				if (file_status == 1) {
-
-					//Kontrolovaù 
-					pole[seq].sequence = seq;
-					strncpy(pole[seq].data, rec + sizeof(Header), frag_len);
+					//Ukladanie do s˙boru
 					fwrite(rec + sizeof(Header), 1, frag_len, fw);
-					//Bolo fwrite(rec + sizeof(Header),1, strlen(rec + sizeof(Header)), fw);
 				}
 				else {
 
-
-					pole[seq].sequence = seq;
-					strncpy(pole[seq].data, rec + sizeof(Header), frag_len);
-
-					//MusÌme spojiù r·mce podæa poradia ako priöli
-					/*for (int i = 1; i <= frag_num; i++) {
-						if (pole[i].sequence != i) {
-							printf("Packet  %d nedorazil!\n", i);
-						}
-						message = defragment_file(pole[i].data, message, frag_len);
-					}
-					*/
-
-					/*if (fwrite(message, 1, strlen(message), fw) <= 0) {
-						printf("Nepodarilo sa ulozit subor\n");
-					}
-					else {
-						printf("Subor bol uspesne ulozeny\n");
-					}*/
-
-					//Bolo fwrite(rec + sizeof(Header), 1, strlen(rec + sizeof(Header)), fw);
-					//long min_frag_len = header->header_info
+					//Ukladanie do s˙boru
 					fwrite(rec + sizeof(Header), 1, strlen(rec + sizeof(Header)), fw);
 
 					if (fclose(fw) == EOF) {
 						printf("Subor sa nepodarilo zatvorit\n");
 					}
 					else {
+						printf("\n#########################\n");
 						printf("Subor bol uspesne ulozeny\n");
 					}
 
@@ -840,7 +798,7 @@ void client(){
 
 		//NaËÌtanie a odoslanie spr·vy
 		if (choice == 1 || choice == 2) {
-			printf("Zadajte spravu\n");
+			printf("Zadajte spravu:\n");
 
 			getc(stdin);
 
@@ -848,7 +806,7 @@ void client(){
 			memset(message, '\0', BUFFLEN);
 
 			gets_s(message, BUFFLEN);
-			printf("Sprava je %s\n", message);
+			printf("\nSprava je: %s\n", message);
 
 			//Alok·cia datagramu na odoslanie a pretypovanie na typ Header
 			datagram = (char*)malloc((sizeof(Header) + frag_len + 1) * sizeof(char));
@@ -954,8 +912,9 @@ void client(){
 			}
 			else {
 				//Chybov· spr·va!!!
-				printf("Zadajte chybovost v %%: ");
-				scanf("%d", &error_rate);
+				//printf("Zadajte chybovost v %%: ");
+				//scanf("%d", &error_rate);
+				error_rate = 99;
 
 				if (error_rate <= 0 || error_rate >100) {
 					printf("Nespravna zadana chybovost");
@@ -1124,17 +1083,6 @@ void client(){
 				continue;
 			}
 
-			//printf("Nacitana sprava je %s\n", message);
-
-			//ZakÛdovanie a odosielanie s˙boru
-			//UrËÌme poËet fragmentov a zakÛdovanie
-			/*if (strlen(message) % frag_len == 0) {
-				frag_num = strlen(message) / frag_len;
-			}
-			else {
-				frag_num = strlen(message) / frag_len;
-				frag_num += 1;
-			}*/
 
 			if (file_size % frag_len == 0) {
 				frag_num = file_size / frag_len;
