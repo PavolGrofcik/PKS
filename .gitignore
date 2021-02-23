@@ -1,0 +1,6 @@
+Debug/
+PKS Z1/
+PKS Z2/
+*.pcap
+*.txt
+*.c
