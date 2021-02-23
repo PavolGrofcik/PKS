@@ -1,8 +1,0 @@
-#This symbol # is for comment
-#Name of protocol, <0-6) Dst MAC, <6,12) Src MAC, <12,14) Type or Length <0600 = IEEE 802.3, 0800 IPv4, 0806 ARP
-Ethernet II IEEE 802.3 6 12 14 1536 0800 IPv4 0806 ARP 170	SNAP	255		Raw
-#ARP 12th pos 806 = ARP(Length 2 bytes), HW type 1 - Eth, 2 IEEE.., 20th byte(len 2) = opcode, 1 request, 2 reply
-#ARP 12 2 1 Ethernet 2 IEEE-802.2 20 2 1 request 2 reply
-#Number of upper protocols excluding IPv4
-#4
-#Here you are
